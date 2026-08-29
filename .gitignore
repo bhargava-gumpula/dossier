@@ -1,0 +1,28 @@
+# --- Rule 7: no personal data, ever ---
+private/
+*.private.*
+real-resume*
+**/dad-resume*
+.env
+.env.*
+!.env.example
+
+# secrets
+*.pem
+*.key
+credentials.json
+token.json
+
+# deps / build
+node_modules/
+dist/
+build/
+.vite/
+__pycache__/
+*.pyc
+.venv/
+
+# runtime artifacts
+screenshots/
+*.log
+.DS_Store
