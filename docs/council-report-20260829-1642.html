@@ -1,0 +1,194 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Council Verdict — Dossier</title>
+<style>
+:root{--bg:#fbfbfa;--fg:#1a1a19;--mut:#6b6b66;--line:#e4e3df;--card:#fff;
+--red:#b3261e;--amber:#8a5a00;--green:#1e6b47;--blue:#1c4f8a;--accent:#8a3ffc}
+@media(prefers-color-scheme:dark){:root{--bg:#16161a;--fg:#ececeb;--mut:#9a9a95;--line:#2e2e34;
+--card:#1e1e23;--red:#ff8a80;--amber:#f0b429;--green:#5ddba4;--blue:#7ab8ff;--accent:#c39bff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);
+font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:40px 20px}
+.w{max-width:820px;margin:0 auto}
+h1{font-size:28px;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mut);font-size:14px;margin-bottom:8px}
+.clock{display:inline-block;background:var(--red);color:#fff;padding:4px 12px;border-radius:20px;
+font-size:13px;font-weight:600;margin-bottom:28px}
+@media(prefers-color-scheme:dark){.clock{color:#16161a}}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--mut);
+margin:36px 0 12px;font-weight:700}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:12px}
+.verdict{border-left:4px solid var(--accent)}
+.q{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 20px;
+color:var(--mut);font-size:14.5px;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:8px 0}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.pill{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:700}
+.cut{background:rgba(179,38,30,.13);color:var(--red)}
+.exp{background:rgba(30,107,71,.14);color:var(--green)}
+.mid{background:rgba(138,90,0,.14);color:var(--amber)}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:8px}
+summary{cursor:pointer;font-weight:600;font-size:15px}
+details p{color:var(--mut);font-size:14.5px}
+.big{font-size:18px;font-weight:600;line-height:1.5}
+.no{color:var(--red);font-weight:700}
+ol li,ul li{margin-bottom:9px}
+footer{color:var(--mut);font-size:12.5px;border-top:1px solid var(--line);margin-top:44px;padding-top:14px}
+code{background:var(--line);padding:1px 5px;border-radius:4px;font-size:13px}
+</style></head><body><div class="w">
+
+<h1>Council Verdict — Dossier</h1>
+<div class="sub">5 advisors · 5 peer reviews · chairman synthesis · Agent Harness Hackathon</div>
+<div class="clock">18.3 hours to deadline · Sun 30 Aug, 11:00 PDT</div>
+
+<div class="q"><strong>The question:</strong> Is Dossier a good project for this hackathon, and
+should it be built as planned? An agent that applies to jobs the way each company requires —
+resolving the company's board, fingerprinting the apply route, reading the real form, filling it in
+a browser, and stopping at a harness approval gate. ~16h of planned work against ~18h remaining, solo.</div>
+
+<h2>The verdict</h2>
+<div class="card verdict">
+<p class="big">The idea is good. Keep it. But the council's loudest recommendation — “cut to
+Greenhouse only” — is <span class="no">wrong</span>, and following it would produce a demo where the
+agent never actually submits anything.</p>
+<p>Greenhouse <em>always</em> hits the reCAPTCHA wall. It is the richest source of form schemas and it
+gives you the wall moment — but it can never be the route that completes an application. The
+<strong>email route is the only one where the agent genuinely finishes the job by itself.</strong>
+So email is not a cut candidate; it is load-bearing. Cut Workday and Ashby instead.</p>
+</div>
+
+<h2>Where the council agreed</h2>
+<div class="card">
+<ol>
+<li><strong>The schedule is not a plan.</strong> Four of five said this independently. 16h against
+18h with zero slack, and a cut list you consult when desperate is not the same as a decision rule.</li>
+<li><strong>Phase 3 is a single point of failure.</strong> Playwright blocks six downstream phases
+against the least predictable surface there is — real-world DOMs.</li>
+<li><strong>The pitch verb overpromises.</strong> “Applies to jobs” versus what mostly happens —
+“fills the form, you click submit.” This must be the headline, not a caveat.</li>
+<li><strong>The wall-stop is the actual product thesis</strong> — and it is currently one bullet
+point out of eight.</li>
+</ol>
+</div>
+
+<h2>Where the council clashed</h2>
+<div class="card">
+<table>
+<tr><th>Position</th><th>Who</th><th>Argument</th></tr>
+<tr><td><span class="pill cut">CUT HARD</span></td><td>Contrarian, Executor, First Principles</td>
+<td>One route only. Kill Workday, Ashby, Start All. Breadth buys no judging points and spends the
+only scarce resource on integration risk.</td></tr>
+<tr><td><span class="pill exp">EXPAND</span></td><td>Expansionist</td>
+<td>Start All across five real companies live <em>is</em> the proof TrueForge does real
+orchestration. Without it you have one linear script.</td></tr>
+</table>
+<p>Both are right about different criteria. Cutting protects technical excellence and presentation;
+expanding protects sponsor-tool use. Peer review sided <strong>against</strong> the Expansionist on
+timing while siding <strong>for</strong> its diagnosis.</p>
+</div>
+
+<h2>Blind spots caught in peer review</h2>
+<div class="card">
+<ol>
+<li><strong>Nobody mentioned Qodo — flagged by 4 of 5 reviewers, the strongest signal in the whole council.</strong>
+The rules word criterion 4 as “is TrueForge central… <em>and did Qodo review the pull requests</em>.”
+That's half an axis, and the <em>merged</em> PR carries external latency nobody budgeted for.</li>
+<li><strong>Nobody did the sleep arithmetic.</strong> 18.3h wall clock minus ~6h sleep minus breaks is
+~11–12h effective against 16h planned. That is a <strong>4–5 hour deficit</strong>, not a tight
+schedule. Cuts are mandatory, not optional.</li>
+<li><strong>The “cut to Greenhouse” advice is self-defeating</strong> — it removes every genuine
+auto-submit case. Caught only in review, by comparing the recommendation against the project's own
+verified findings.</li>
+<li><strong>Demoing live against real production ATS</strong> means spamming real recruiters and
+betting your three minutes on sites you don't control.</li>
+<li><strong>Résumé PII inside the sandbox</strong> is its own safety surface, separate from the gate.</li>
+<li><strong>TrueForge's own live reliability</strong> is a distinct risk from Playwright's.</li>
+</ol>
+</div>
+
+<h2>The recommendation</h2>
+<div class="card verdict">
+<ol>
+<li><strong>Keep two routes: Greenhouse + email.</strong> Greenhouse gives schema richness and the
+wall moment. Email gives the only genuine completion. Workday and Ashby become “designed for” in
+the README. Keep Start All — it costs little once sessions are per-job, and it is the orchestration proof.</li>
+<li><strong>Rename the promise.</strong> Not “applies to jobs.” Something like <em>“does everything
+up to the click the platforms reserve for a human.”</em> Put the tally on the dashboard —
+<code>2 submitted · 3 handed off · walls named</code> — the thesis in one glance.</li>
+<li><strong>Replace the cut list with a clock trigger.</strong> A named time, written down, after
+which you stop and ship what works.</li>
+<li><strong>Record the demo incrementally</strong> as each phase lands, not at hour 17.</li>
+</ol>
+</div>
+
+<h2>The one thing to do first</h2>
+<div class="card verdict">
+<p class="big">Write this at the top of the plan, with the real time in it:</p>
+<p><em>“If <code>inspect_form</code> and <code>fill_form</code> are not working on one real form by
+<strong>23:30 PDT tonight</strong>, abandon browser automation entirely and ship
+Greenhouse-schema + email-submit.”</em></p>
+<p>Four of five advisors identified schedule collapse as the dominant failure mode. A trigger with a
+number on it is the only thing that converts that warning into a decision you'll actually make while
+tired.</p>
+</div>
+
+<h2>Full advisor responses</h2>
+<details><summary>The Contrarian — “that's not a build plan, that's a hope schedule”</summary>
+<p>Fatal flaw isn't in the tech — it's in what “done” means. Verification went to the hard parts and
+none to what judges score: does an 18-hour solo build with zero slack produce something that runs
+live in 3 minutes without narrating over a crash. Phase 3 is the most fragile category of software
+to write; if it slips 90 minutes, sandbox, gate, dashboard, README, Qodo review and video get
+squeezed simultaneously. No fallback, no cut line. Second: your own research proves the headline
+feature is mostly theater. Ask now, not at hour 16: what one thing, if it breaks, kills the demo —
+and do you have a recorded fallback clip already?</p></details>
+
+<details><summary>The First Principles Thinker — “you're optimizing the wrong variable”</summary>
+<p>“Win the hackathon” decomposes into maximizing score across six axes in ~14 effective hours, not
+building the product you'd ship in three months. Full autonomous ATS submission is structurally
+impossible — that's proof the kill feature doesn't exist. What's novel isn't reaching five
+platforms; it's that the harness makes a judgment call, asks a human what it can't know, refuses to
+fabricate a claim, and stops before an irreversible act. Demonstrable with one reliable route plus
+one wall example. Breadth isn't buying judging points.</p></details>
+
+<details><summary>The Expansionist — “the wall-stop is the whole pitch, make it unmissable”</summary>
+<p>Judges aren't grading a job-application tool, they're grading an agent harness doing real
+orchestration. The verified research is the asset, not the feature. The stop-and-hand-over behavior
+is control-and-safety AND impact AND presentation pointing at the same three seconds of footage.
+Give it a running tally — “3 auto-submitted, 5 handed off, walls named” — that's the thesis in one
+glance. Bigger swing: Start All across five real companies, triaged in parallel.</p></details>
+
+<details><summary>The Outsider — “that's a session count, not an architecture”</summary>
+<p>TrueForge is the hard requirement and one of six criteria, and it's the least-described part of
+the plan. Everything else gets verified findings and hour estimates; TrueForge gets one line.
+Slugify → probe → fingerprint → read schema → fill → screenshot → stop reads like a deterministic
+pipeline with an LLM drafting text at one step, not an agent reasoning through a harness. And the
+pitch verb is “applies to jobs” when the findings say it mostly can't — that gap must be the
+headline, not a caveat, or it plays as overpromising.</p></details>
+
+<details><summary>The Executor — “cut now, while it's cheap”</summary>
+<p>16h against 18h including sleep is a rounding error from failure. Phase 3 gates everything, and
+browser automation against real DOMs always runs long. You've designed four products; judges watch
+one run. Cut to one route, kill Start All, move Workday and Ashby to “designed for” in the README.
+And write the demo script and record a placeholder walkthrough NOW, before Phase 3 lands, so video
+isn't a blind estimate at hour 17 with a tired brain.</p></details>
+
+<h2>Peer review highlights</h2>
+<details><summary>Which response was strongest, and what everyone missed</summary>
+<p><strong>Three of five reviewers picked the Outsider</strong> — the only advisor who interrogated
+the mandatory TrueForge requirement rather than repackaging the project's own research. “A
+deterministic pipeline wearing an agent costume” risks a full axis outright.</p>
+<p><strong>One picked the Expansionist</strong>, on the grounds it was the only one to follow
+the verified finding to its conclusion: if no ATS allows unauthenticated submission, the wall-stop
+isn't a fallback, it's the only thing that ever happens on an ATS route.</p>
+<p><strong>Biggest blind spot, four of five votes: the Expansionist</strong> — right diagnosis, wrong
+prescription, arguing for more surface area on a build with zero slack and never once engaging the
+hour budget.</p>
+<p><strong>One picked the Executor</strong> — the only advisor whose advice was an executable checklist rather than a stance, and the only one that avoided claiming Greenhouse could auto-submit.</p>
+<p><strong>The sharpest catch</strong> came from the third reviewer: the First Principles
+recommendation is internally contradictory. Greenhouse always hits the wall, so “Greenhouse only,
+cut email and bespoke” leaves zero genuine auto-submit cases — the opposite of what it intended.</p>
+</details>
+
+<footer>Council run 29 Aug 2026, 16:42 PDT · 5 advisors, 5 peer reviewers, chairman synthesis ·
+Full transcript: <code>council-transcript-20260829-1642.md</code></footer>
+</div></body></html>
