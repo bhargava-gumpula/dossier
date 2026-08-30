@@ -11,58 +11,16 @@
  */
 
 .landing {
-  /* Light */
-  --lx-sheet:       linear-gradient(to bottom, #fff, #ffffff 50%, #e8e8e8 88%);
-  --lx-bg:          #ffffff;
-  --lx-bg-2:        #fafafa;
-  --lx-fg:          #0a0a0a;
-  --lx-fg-2:        #52525b;
-  --lx-fg-3:        #71717a;
-  --lx-line:        rgba(0, 0, 0, 0.07);
-  --lx-line-strong: rgba(0, 0, 0, 0.14);
-  --lx-pill-line:   rgba(209, 213, 219, 0.55);
-  --lx-card:        linear-gradient(to top right, rgba(212, 212, 216, 0.30), rgba(156, 163, 175, 0.14), transparent);
-  --lx-hover:       rgba(0, 0, 0, 0.04);
-  --lx-rule:        #f0f0f0;
-  --lx-btn-bg:      #0a0a0a;
-  --lx-btn-fg:      #ffffff;
-  --lx-title-ink:   linear-gradient(to bottom right, #000 30%, rgba(0, 0, 0, 0.4));
-  --lx-accent:      radial-gradient(closest-side, #fff 82%, #000000);
-  --lx-panel:       #0a0a0a;
-  --lx-panel-fg:    #fafafa;
-
-  /* hero.css reads these two under its own names */
-  --hx-sheet:       var(--lx-sheet);
-  --hx-rule:        var(--lx-rule);
-  --hx-accent:      var(--lx-accent);
-  --hx-title-ink:   var(--lx-title-ink);
+  /* The design tokens live in theme.css now, shared with the dashboard. What is
+     left here is only what is true of the landing page itself. */
+  --hx-sheet:     var(--lx-sheet);
+  --hx-rule:      var(--lx-rule);
+  --hx-accent:    var(--lx-accent);
+  --hx-title-ink: var(--lx-title-ink);
 
   background: var(--lx-bg);
   color: var(--lx-fg);
   letter-spacing: -0.02em;
-}
-
-@media (prefers-color-scheme: dark) {
-  .landing {
-    --lx-sheet:       linear-gradient(to bottom, #000, rgba(0,0,0,0) 30%, #898e8e 78%, #ffffff 99%);
-    --lx-bg:          #000000;
-    --lx-bg-2:        #0a0a0a;
-    --lx-fg:          #fafafa;
-    --lx-fg-2:        #a1a1aa;
-    --lx-fg-3:        #8b8b93;
-    --lx-line:        rgba(255, 255, 255, 0.08);
-    --lx-line-strong: rgba(255, 255, 255, 0.16);
-    --lx-pill-line:   rgba(255, 255, 255, 0.08);
-    --lx-card:        linear-gradient(to top right, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02), transparent);
-    --lx-hover:       rgba(255, 255, 255, 0.06);
-    --lx-rule:        #262626;
-    --lx-btn-bg:      #fafafa;
-    --lx-btn-fg:      #0a0a0a;
-    --lx-title-ink:   linear-gradient(to bottom right, #fff 30%, rgba(255, 255, 255, 0.4));
-    --lx-accent:      radial-gradient(closest-side, #000 82%, #ffffff);
-    --lx-panel:       #0c0c0d;
-    --lx-panel-fg:    #fafafa;
-  }
 }
 
 /* Typography ---------------------------------------------------------------
