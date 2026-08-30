@@ -93,6 +93,7 @@ async function jobLive(job) {
   let resumePath = null;
   let tailoring = null;
   let submitResult = null;
+  let turnError = null;
   for (const entry of events) {
     const ev = entry.event ?? entry;
     for (const c of ev.tool_calls ?? []) {
@@ -141,6 +142,15 @@ async function jobLive(job) {
   let status = state.status === 'running' ? 'working' : (job.status ?? 'idle');
   if (pending?.type === 'tool.approval_required') status = 'awaiting-approval';
   else if (pending?.type === 'tool.response_required') status = 'needs-answer';
+  // A failed turn used to leave the row reading "working" for ever: there was no
+  // case for it, so it fell back to the status stored when the job was started
+  // and never changed again. The agent can die for reasons that have nothing to
+  // do with this project - an upstream 503 is what surfaced this - and a run
+  // that has stopped must not keep claiming it is still going.
+  else if (state.status === 'error') {
+    status = 'failed';
+    turnError = state.message || 'the agent run failed';
+  }
   else if (state.status === 'done') {
     // "submitted" has to come from what submit_form actually reported, not from
     // the human having approved it: an approved submit can still be refused by a
@@ -178,6 +188,7 @@ async function jobLive(job) {
     steps,
     output,
     submitResult,
+    turnError,
   };
 }
 

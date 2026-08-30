@@ -16,6 +16,7 @@ const LABEL = {
   found: 'found', working: 'working', 'needs-answer': 'needs you',
   'awaiting-approval': 'awaiting you', submitted: 'submitted',
   blocked: 'blocked', ready: 'ready', starting: 'starting',
+  failed: 'failed', 'not-submitted': 'not submitted',
 };
 
 export default function Dashboard({ onHome }) {
@@ -187,6 +188,13 @@ function Detail({ job, profile, tab, setTab, act, busy, refresh }) {
               <div><span className="k">Status</span><span className="v">{LABEL[live.status] ?? live.status ?? 'found'}</span></div>
               {live.steps?.length ? <div><span className="k">Steps</span><span className="v">{live.steps.length}</span></div> : null}
             </div>
+
+            {live.status === 'failed' && (
+              <div className="note error">
+                This run stopped before finishing. {live.turnError}
+                <div className="sub">Nothing was submitted. Start it again to retry.</div>
+              </div>
+            )}
 
             {live.status === 'needs-answer' && live.question && (
               <div className="card ask">
