@@ -334,3 +334,30 @@ export async function resolveCompany(company) {
       : {}),
   };
 }
+
+// Search often returns a board's INDEX rather than a posting - "Crusoe Energy"
+// finds https://jobs.ashbyhq.com/Crusoe, which is the whole board. Handing that
+// to the caller as a result means the human is offered a link to click instead
+// of a list of jobs, when the board behind it is one we can already read.
+// So an index URL is turned back into its postings.
+export async function boardFromUrl(raw) {
+  let u;
+  try { u = new URL(raw); } catch { return null; }
+  const host = u.hostname.toLowerCase().replace(/^www\./, '');
+  const parts = u.pathname.split('/').filter(Boolean);
+  const one = parts.length === 1 ? parts[0] : null;
+
+  const take = async (source, slug, fn) => {
+    if (!slug) return null;
+    const jobs = await fn(slug).catch(() => null);
+    return jobs?.length ? { source, board: slug, jobs } : null;
+  };
+
+  if (host === 'jobs.ashbyhq.com') return take('ashby', one, ashbyJobs);
+  if (host.endsWith('greenhouse.io')) return take('greenhouse', one, greenhouseJobs);
+  if (host === 'jobs.jobvite.com') return take('jobvite', one, jobviteJobs);
+  if (host.endsWith('.myworkdayjobs.com')) {
+    return take('workday', host.split('.')[0], workdayJobs);
+  }
+  return null;
+}

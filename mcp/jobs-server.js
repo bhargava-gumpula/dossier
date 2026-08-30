@@ -11,7 +11,7 @@
 // single call and leave no single clean approval gate to demonstrate.
 
 import { createServer } from 'node:http';
-import { resolveCompany, greenhouseJobs, ashbyJobs, workdayJobs } from './lib/sources.js';
+import { resolveCompany, greenhouseJobs, ashbyJobs, workdayJobs, boardFromUrl } from './lib/sources.js';
 import { detectApplyRoute } from './lib/route.js';
 import { searchJobs, scrapeBlocked, isSearchAvailable } from './lib/websearch.js';
 
@@ -127,7 +127,7 @@ async function toolFetchBlockedPage({ url }) {
 
 async function toolFindJobs({ company, role, limit = 10 }) {
   limit = clampLimit(limit, 10);
-  const r = await resolveCompany(company);
+  let r = await resolveCompany(company);
 
   if (!r.found) {
     // Direct board APIs are fast, free and exact, but they only cover employers
@@ -136,7 +136,18 @@ async function toolFindJobs({ company, role, limit = 10 }) {
     const searchable = await isSearchAvailable();
     if (searchable) {
       const web = await searchJobs(company, role, { limit });
-      if (web.jobs.length) {
+
+      // Search usually finds the board's INDEX rather than a posting - the
+      // slug it was asked for did not match ("Crusoe Energy" resolves nothing,
+      // but search finds jobs.ashbyhq.com/Crusoe). That index is a board this
+      // already knows how to read, so it is turned back into real postings
+      // instead of being handed over as a link for the human to click.
+      for (const hit of web.jobs) {
+        const board = await boardFromUrl(hit.url);
+        if (board) { r = { found: true, company, viaSearch: true, ...board }; break; }
+      }
+
+      if (!r.found && web.jobs.length) {
         return {
           found: true,
           company,
@@ -151,7 +162,7 @@ async function toolFindJobs({ company, role, limit = 10 }) {
         };
       }
     }
-    return {
+    if (!r.found) return {
       found: false,
       company,
       tried_slugs: r.triedSlugs,
