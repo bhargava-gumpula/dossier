@@ -219,36 +219,55 @@ was reviewed by **Qodo** via `/agentic_review` and merged only afterwards. `main
 branch-protected with `enforce_admins: true`, so nothing reaches it any other way.
 
 Qodo raised **26 findings**. Five were already fixed by later commits on the branch and one was
-outdated by the time the review settled, leaving **20 live**. Six were acted on before merge;
-the rest were triaged and left, deliberately.
+outdated by the time the review settled, leaving **20 live**. All 20 were worked: **19 fixed**, and
+**one was not a bug**.
 
-**What Qodo caught that was real, and what changed:**
+Each was checked against the code before being believed. That mattered — Qodo's line numbers point
+at the PR diff rather than current `HEAD`, and one location had drifted onto unrelated code.
 
-| # | Finding | What it actually was | Outcome |
-| --- | --- | --- | --- |
-| 9 | Browser redirects bypass the egress guard | **The important one.** The guard checked the URL it was handed, then `page.goto` followed redirects anywhere. A public posting could bounce the browser onto loopback and have the contents read back — the confused-deputy case the guard exists to prevent. | Fixed |
-| 14 | Oversized bodies hang the request | `req.destroy()` emits neither `end` nor reliably `error`, so the promise never settled and the connection hung forever. Both MCP servers. | Fixed |
-| 26 | Negative limit expands results | `slice(0, -1)` means "all but the last", so asking for `-1` jobs returned nearly all of them. | Fixed |
-| 15 | Slug drops "the" | `"The Browser Company"` — the example in the comment directly above the function — probed `browsercompany`, never `thebrowsercompany`, which is the real board. | Fixed |
-| 24 | Demo response enables XSS | The local sink echoed the submitted name into HTML unescaped. | Fixed |
-| 23 | Demo route blocked by default | The allowlist is empty by default and the demo needs it, which was nowhere documented. | Documented, not changed — defaulting it open would undo the property that makes the guard worth having |
+### Security
 
-The #9 fix is worth one more note, because the obvious version of it does not work. A
-context-level `route` handler covers subresources, but Playwright raises **no route event for a
-main-frame redirect** — Chromium follows the `30x` internally. That was proved with a test before
-anything depended on it. The redirect chain is therefore walked *after* navigation via
-`redirectedFrom()`, and any blocked hop makes the tool report nothing about the page. Verified
-A/B: with the destination not allowlisted the tool returns 0 fields and `wall: blocked`; with it
-allowlisted, the same navigation returns all 3.
+| # | What it actually was | How it was proved |
+| --- | --- | --- |
+| **9** | The guard checked the URL it was handed, then `page.goto` followed redirects anywhere. A posting could bounce the browser onto loopback and have the contents read back. | The obvious fix does not work: Playwright raises **no route event for a main-frame redirect**. The chain is walked after navigation via `redirectedFrom()`. A/B against two local servers: destination not allowlisted → 0 fields, `wall: blocked`; allowlisted → all 3. |
+| **10** | DNS rebinding. The guard resolved a name, approved it, and `fetch` resolved it again when connecting — so the vetted address and the used address could differ. | The address the socket uses is now the vetted one, via an undici dispatcher that refuses blocked ranges at connect time. Proved with `localtest.me` and `127.0.0.1.nip.io` — public names resolving to `127.0.0.1` — refused with the pre-check bypassed, while `example.com` still returns 200. |
+| **6** | `fill_form` claimed `readOnlyHint`, but it types into a page this project does not control, whose scripts can transmit values before the gate. | Annotation corrected. Verified it does *not* create a second gate: the server entry pins `submit_form` explicitly. |
 
-**What was left, and why.** The remaining 14 are recorded on the PR. They cluster into: races on
-the dashboard's JSON queue if several applications are started at once (#1, #20, #21); status
-reporting at edges of the approval flow (#2, #3, #4, #7, #8); DNS rebinding and DNS resolution
-falling outside the request timeout (#10, #25); and smaller correctness items (#6, #11, #16,
-#22). They are genuine, and several need real work — request-level locking, resolve-then-pin
-address handling — rather than a patch. Against a hard deadline, on a single-operator local tool
-with a working demo to record, taking them was the wrong trade. Naming them is more useful than
-quietly shipping past them.
+### Correctness
+
+| # | What it actually was |
+| --- | --- |
+| **8** | The submit-time re-check read the page text and then tested only for a CAPTCHA, so an account wall fell through to a generic "Apply" control on a sign-in page and reported success for an application nobody received. |
+| **2** | The dashboard set `submitted` the moment the approval turn was accepted — so it claimed an application had been sent whenever a human clicked approve, even when `submit_form` then refused a CAPTCHA. Submission is now read back from the tool's own result. |
+| **3** | A failed résumé rebuild left the profile ahead of the PDF, combining new answers with the old attachment. The snapshot is now restored. |
+| **22** | Only `op` was required, so an edit with no value persisted `null`, printed "null" on the résumé, and made later edits throw. |
+| **4** | `fill_form` returned `fillId` while its schema and `submit_form` both say `fill_id`. |
+| **11** | Workday pagination turned a failed page into an empty one, so roles on a timed-out page vanished from a result still presented as complete. |
+| **7** | The wall path said "hand the filled form to the human", but the fill lives in a headless context nobody can type into. It now says so, and hands over the URL, the reason and the values. |
+| **15** | `"The Browser Company"` — the example in the comment directly above the function — never probed `thebrowsercompany`. |
+| **24** | The demo sink echoed the submitted name into HTML unescaped. |
+| **26** | `slice(0, -1)` means "all but the last", so asking for `-1` jobs returned nearly all of them. |
+
+### Reliability
+
+| # | What it actually was |
+| --- | --- |
+| **1**, **20** | Queue writes are read-whole-file/mutate/write-whole-file and "Start all" fired them together, so the last write erased `sessionId`s the others had recorded, orphaning live agent sessions. Mutations are serialised; starting an already-working job is refused. Twelve concurrent adds now all survive. |
+| **21** | `update_profile` had the same shape, with batched MCP calls running concurrently. Serialised the same way. |
+| **14** | `req.destroy()` emits neither `end` nor reliably `error`, so the promise never settled and the connection hung forever. A 5MB body is now refused in 10ms. |
+| **25** | The 20s abort signal covered `fetch` but not the DNS lookup before it. The lookup has its own deadline. |
+
+### The one that was not a bug
+
+**#16** claimed nothing registers `dossier-jobs` on a clean install.
+[`scripts/register-mcp-servers.sh`](./scripts/register-mcp-servers.sh) does exactly that, by URL,
+and the quickstart above says to run it. Qodo read the agent manifest without the script. Recorded
+rather than "fixed", because agreeing with a review you have checked and found wrong is worse than
+disagreeing with it.
+
+**#23** — the guard's allowlist being empty by default, which the demo needs — was documented in
+`.env.example` and the quickstart rather than changed. Defaulting it open would undo the property
+that makes the guard worth having.
 
 ## AI assistance disclosure
 
