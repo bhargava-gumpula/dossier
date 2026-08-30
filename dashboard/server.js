@@ -89,7 +89,7 @@ async function jobLive(job) {
   catch { /* events are best-effort */ }
 
   const steps = [];
-  let question = null;
+  const questions = [];
   let approval = null;
   let resumePath = null;
   let tailoring = null;
@@ -108,7 +108,7 @@ async function jobLive(job) {
       if (fn === 'exec') label = 'sandbox: ' + (args.intent ?? 'ran code').slice(0, 60);
       if (fn === 'ask_user_question') {
         label = 'asked you a question';
-        question = { toolCallId: c.id, text: args.question ?? '', options: args.options ?? [] };
+        questions.push({ toolCallId: c.id, text: args.question ?? '', options: args.options ?? [] });
       }
       steps.push({ label, id: c.id });
       if (label === 'submit_form') approval = { toolCallId: c.id, args };
@@ -158,6 +158,14 @@ async function jobLive(job) {
       } catch { /* not the response we're after */ }
     }
   }
+
+  // One required action can hold SEVERAL tool calls at once - the agent is free
+  // to ask four things in a single turn - and TrueForge refuses a batch that
+  // does not resolve every one of them. Answering just the first was rejected
+  // with "Send batch must resolve all pending tool calls awaiting user input".
+  const pendingIds = (pending?.tool_calls ?? []).map((c) => c.id);
+  const pendingSet = new Set(pendingIds);
+  const openQuestions = questions.filter((q) => pendingSet.has(q.toolCallId));
 
   let status = state.status === 'running' ? 'working' : (job.status ?? 'idle');
   if (pending?.type === 'tool.approval_required') status = 'awaiting-approval';
@@ -214,8 +222,10 @@ async function jobLive(job) {
     tailoring,
     threadId: pending?.thread_id ?? 'main',
     pendingType: pending?.type ?? null,
-    pendingToolCallId: pending?.tool_calls?.[0]?.id ?? null,
-    question,
+    pendingToolCallId: pendingIds[0] ?? null,
+    pendingToolCallIds: pendingIds,
+    question: openQuestions[0] ?? null,
+    questions: openQuestions,
     approval,
     steps,
     output,
@@ -372,16 +382,25 @@ const api = {
     const q = loadQueue();
     const job = q.jobs.find((j) => j.id === body.id);
     if (!job?.sessionId) throw new Error('job not started');
+
+    // Every pending call has to be answered together. `answers` carries one
+    // entry per question; the single-answer form is still accepted so an older
+    // caller keeps working.
+    const answers = Array.isArray(body.answers) && body.answers.length
+      ? body.answers
+      : [{ toolCallId: body.toolCallId, content: body.content }];
+    const thread_id = body.threadId ?? 'main';
+
     await tf('POST', `/sessions/${job.sessionId}/turns`, {
-      input: [{
+      input: answers.map((a) => ({
         type: 'user.tool_response',
-        thread_id: body.threadId ?? 'main',
-        tool_call_id: body.toolCallId,
-        content: body.content,
-      }],
+        thread_id,
+        tool_call_id: a.toolCallId,
+        content: a.content,
+      })),
       stream: false,
     });
-    return { answered: true };
+    return { answered: answers.length };
   },
 
   // Releases the real held tool call. This is the gate.

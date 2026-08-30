@@ -99,6 +99,16 @@
   background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 .card.ask h3 { color: var(--amber); }
+.ask-note { font-size: 13.5px; color: var(--fg-3); margin-bottom: 14px; }
+.ask-one { padding: 14px 0; border-top: 1px solid var(--lx-line); }
+.ask-one:first-of-type { border-top: 0; padding-top: 0; }
+.q-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 5px; margin-right: 9px;
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  color: var(--amber); font-size: 11.5px; font-weight: 700;
+  vertical-align: middle;
+}
 
 /* A wall the agent cannot legitimately pass. Red, because the application is
    genuinely not going anywhere until a person finishes it by hand. */

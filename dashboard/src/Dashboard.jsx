@@ -164,7 +164,7 @@ export default function Dashboard({ onHome }) {
 
 function Detail({ job, profile, tab, setTab, act, busy, refresh }) {
   const live = job.live ?? {};
-  const [answer, setAnswer] = useState('');
+  const [answers, setAnswers] = useState({});
   const [reason, setReason] = useState('');
 
   useEffect(() => { setAnswer(''); setReason(''); }, [job.id, live.pendingToolCallId]);
@@ -200,25 +200,56 @@ function Detail({ job, profile, tab, setTab, act, busy, refresh }) {
               </div>
             )}
 
-            {live.status === 'needs-answer' && live.question && (
+            {live.status === 'needs-answer' && live.questions?.length > 0 && (
               <div className="card ask">
-                <h3>The agent needs an answer</h3>
-                <div className="q">{live.question.text}</div>
-                {live.question.options?.length > 0 && (
-                  <div className="opts">
-                    {live.question.options.map((o) => (
-                      <button key={o} className="opt" onClick={() => setAnswer(o)}>{o}</button>
-                    ))}
+                <h3>
+                  {live.questions.length === 1
+                    ? 'The agent needs an answer'
+                    : `The agent needs ${live.questions.length} answers`}
+                </h3>
+                {live.questions.length > 1 && (
+                  <div className="ask-note">
+                    It asked these together, so they have to be sent together.
                   </div>
                 )}
-                <div className="answer-row">
-                  <input value={answer} onChange={(e) => setAnswer(e.target.value)}
-                    placeholder="Your answer…"
-                    onKeyDown={(e) => e.key === 'Enter' && answer.trim() &&
-                      act('/api/jobs/answer', { id: job.id, threadId: live.threadId, toolCallId: live.pendingToolCallId, content: answer })} />
-                  <button className="btn primary" disabled={!answer.trim() || busy}
-                    onClick={() => act('/api/jobs/answer', { id: job.id, threadId: live.threadId, toolCallId: live.pendingToolCallId, content: answer })}>
-                    Send
+
+                {live.questions.map((q, i) => (
+                  <div className="ask-one" key={q.toolCallId}>
+                    <div className="q">
+                      {live.questions.length > 1 && <span className="q-n">{i + 1}</span>}
+                      {q.text}
+                    </div>
+                    {q.options?.length > 0 && (
+                      <div className="opts">
+                        {q.options.map((o) => (
+                          <button key={o} className="opt"
+                            onClick={() => setAnswers((a) => ({ ...a, [q.toolCallId]: o }))}>{o}</button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="answer-row">
+                      <input value={answers[q.toolCallId] ?? ''}
+                        placeholder="Your answer…"
+                        onChange={(e) => setAnswers((a) => ({ ...a, [q.toolCallId]: e.target.value }))} />
+                    </div>
+                  </div>
+                ))}
+
+                <div className="picker-actions">
+                  <button className="btn primary"
+                    disabled={busy || live.questions.some((q) => !(answers[q.toolCallId] ?? '').trim())}
+                    onClick={() => {
+                      act('/api/jobs/answer', {
+                        id: job.id,
+                        threadId: live.threadId,
+                        answers: live.questions.map((q) => ({
+                          toolCallId: q.toolCallId,
+                          content: answers[q.toolCallId] ?? '',
+                        })),
+                      });
+                      setAnswers({});
+                    }}>
+                    {live.questions.length === 1 ? 'Send' : `Send all ${live.questions.length}`}
                   </button>
                 </div>
               </div>

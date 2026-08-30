@@ -12,6 +12,10 @@
   "website": "https://example.com/avery",
   "workAuthorization": "Authorized to work in the US without sponsorship",
   "requiresSponsorship": "No",
+  "willingToRelocate": "No - based in San Francisco and looking for roles there or remote",
+  "onsitePreference": "Comfortable working onsite in San Francisco up to 3 days a week",
+  "earliestStartDate": "Four weeks from an offer",
+  "previouslyInterviewedHere": "No",
   "yearsExperience": 6,
   "skills": [
     "Python",
