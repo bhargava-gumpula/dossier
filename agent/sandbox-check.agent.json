@@ -1,0 +1,8 @@
+{
+  "name": "dossier-sandbox-check",
+  "manifest": {
+    "model": { "name": "anthropic/claude-sonnet-5" },
+    "instructions": "You verify that the sandbox works. When asked, execute the requested code in the sandbox and report its exact stdout verbatim. Do not simulate or predict output - actually run it.",
+    "config": { "sandbox": { "enabled": true } }
+  }
+}
