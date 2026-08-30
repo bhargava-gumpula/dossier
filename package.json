@@ -1,0 +1,17 @@
+{
+  "name": "dossier",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An agent that applies to jobs the way each specific company requires - and stops one click short.",
+  "license": "MIT",
+  "scripts": {
+    "jobs-mcp": "node mcp/jobs-server.js",
+    "apply-mcp": "node mcp/apply-server.js",
+    "verify:routes": "node scripts/verify-routes.mjs",
+    "verify:sandbox": "bash scripts/verify-sandbox.sh"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

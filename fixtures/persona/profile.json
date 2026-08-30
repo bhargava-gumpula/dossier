@@ -1,0 +1,46 @@
+{
+  "_comment": "Synthetic candidate. Entirely fictional - no real person's data appears in this repository or in the demo (hackathon rule 7).",
+  "firstName": "Avery",
+  "lastName": "Okonkwo",
+  "fullName": "Avery Okonkwo",
+  "email": "avery.okonkwo@example.com",
+  "phone": "+1 415 555 0142",
+  "location": "San Francisco, CA",
+  "country": "United States",
+  "linkedin": "https://www.linkedin.com/in/example-avery-okonkwo",
+  "github": "https://github.com/example-avery",
+  "website": "https://example.com/avery",
+  "workAuthorization": "Authorized to work in the US without sponsorship",
+  "requiresSponsorship": "No",
+  "yearsExperience": 6,
+  "skills": [
+    "Python", "TypeScript", "Go", "PostgreSQL", "Kafka", "Kubernetes",
+    "distributed systems", "payments infrastructure", "observability"
+  ],
+  "experience": [
+    {
+      "company": "Meridian Payments",
+      "title": "Senior Backend Engineer",
+      "start": "2022-03",
+      "end": "present",
+      "bullets": [
+        "Led the ledger service rewrite that cut settlement latency from 900ms to 210ms at p99.",
+        "Built the idempotency layer handling 40M payment intents per month with zero double-charges in 18 months.",
+        "Owned on-call for the payments core; reduced page volume 60% by fixing retry storms at the source."
+      ]
+    },
+    {
+      "company": "Northwind Data",
+      "title": "Backend Engineer",
+      "start": "2019-08",
+      "end": "2022-02",
+      "bullets": [
+        "Designed the Kafka ingest pipeline moving 2TB/day into the analytics warehouse.",
+        "Migrated 140 services from hand-rolled configs to Kubernetes operators."
+      ]
+    }
+  ],
+  "education": [
+    { "school": "University of Illinois Urbana-Champaign", "degree": "BS Computer Science", "year": "2019" }
+  ]
+}

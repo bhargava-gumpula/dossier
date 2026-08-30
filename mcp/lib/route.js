@@ -57,65 +57,7 @@ const CAREERS_EMAIL =
   /mailto:([a-z0-9._%+-]*(?:career|job|recruit|hiring|talent|resume|cv)[a-z0-9._%+-]*@[a-z0-9.-]+\.[a-z]{2,})/ig;
 
 
-// ---------------------------------------------------------------- SSRF guard
-//
-// `apply_url` is caller-controlled, so this module must never be usable as a
-// network probe. Only public http(s) destinations are allowed, and because a
-// public host can redirect to a private one, every hop is re-validated.
-
-import { lookup } from 'node:dns/promises';
-import net from 'node:net';
-
-function isBlockedIp(ip) {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    return (
-      a === 0 || a === 10 || a === 127 ||                    // this-net, private, loopback
-      (a === 169 && b === 254) ||                            // link-local + cloud metadata
-      (a === 172 && b >= 16 && b <= 31) ||                   // private
-      (a === 192 && b === 168) ||                            // private
-      (a === 100 && b >= 64 && b <= 127) ||                  // carrier-grade NAT
-      a >= 224                                               // multicast / reserved
-    );
-  }
-  const v6 = ip.toLowerCase().replace(/^\[|\]$/g, '');
-  if (v6 === '::1' || v6 === '::') return true;
-  if (/^f[cd]/.test(v6)) return true;                        // unique local
-  if (/^fe[89ab]/.test(v6)) return true;                     // link-local
-  const mapped = v6.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isBlockedIp(mapped[1]);
-  return false;
-}
-
-async function assertPublicUrl(raw) {
-  let u;
-  try {
-    u = new URL(raw);
-  } catch {
-    throw new Error('not a valid URL');
-  }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-    throw new Error(`blocked scheme: ${u.protocol}`);
-  }
-  const host = u.hostname.replace(/^\[|\]$/g, '');
-  if (net.isIP(host)) {
-    if (isBlockedIp(host)) throw new Error('blocked address range');
-    return u;
-  }
-  if (/^localhost$|\.local$|\.internal$/i.test(host)) {
-    throw new Error('blocked hostname');
-  }
-  let addrs;
-  try {
-    addrs = await lookup(host, { all: true });
-  } catch {
-    throw new Error('host does not resolve');
-  }
-  if (!addrs.length || addrs.some((a) => isBlockedIp(a.address))) {
-    throw new Error('resolves to a blocked address range');
-  }
-  return u;
-}
+import { assertAllowedUrl } from './net-guard.js';
 
 async function fetchPage(url, timeoutMs = 20000) {
   const ctl = new AbortController();
@@ -125,7 +67,7 @@ async function fetchPage(url, timeoutMs = 20000) {
     // Redirects are followed by hand so each hop can be re-validated: a public
     // host is free to redirect into a private range.
     for (let hop = 0; hop < 6; hop++) {
-      await assertPublicUrl(current);
+      await assertAllowedUrl(current);
       const res = await fetch(current, {
         redirect: 'manual',
         headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml' },

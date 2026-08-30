@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><style>
+@page { size: Letter; margin: 0.7in; }
+body { font: 10.5pt/1.45 "Helvetica Neue", Helvetica, Arial, sans-serif; color:#111; }
+h1 { font-size: 19pt; margin:0 0 2px; letter-spacing:-.3px; }
+.contact { color:#555; font-size:9.5pt; margin-bottom:14px; }
+h2 { font-size:9.5pt; text-transform:uppercase; letter-spacing:1.2px; color:#666;
+     border-bottom:1px solid #ddd; padding-bottom:3px; margin:16px 0 8px; }
+.row { display:flex; justify-content:space-between; }
+.row span { color:#666; font-size:9.5pt; }
+.co { color:#444; font-size:10pt; margin-bottom:3px; }
+ul { margin:4px 0 0 16px; padding:0; } li { margin-bottom:3px; }
+.job { margin-bottom:11px; }
+.skills { color:#222; }
+</style>
+<h1>Avery Okonkwo</h1>
+<div class="contact">avery.okonkwo@example.com · +1 415 555 0142 · San Francisco, CA · https://github.com/example-avery</div>
+<h2>Experience</h2>
+  <div class="job">
+    <div class="row"><strong>Senior Backend Engineer</strong><span>2022-03 – present</span></div>
+    <div class="co">Meridian Payments</div>
+    <ul><li>Led the ledger service rewrite that cut settlement latency from 900ms to 210ms at p99.</li><li>Built the idempotency layer handling 40M payment intents per month with zero double-charges in 18 months.</li><li>Owned on-call for the payments core; reduced page volume 60% by fixing retry storms at the source.</li></ul>
+  </div>
+  <div class="job">
+    <div class="row"><strong>Backend Engineer</strong><span>2019-08 – 2022-02</span></div>
+    <div class="co">Northwind Data</div>
+    <ul><li>Designed the Kafka ingest pipeline moving 2TB/day into the analytics warehouse.</li><li>Migrated 140 services from hand-rolled configs to Kubernetes operators.</li></ul>
+  </div>
+<h2>Skills</h2><div class="skills">Python, TypeScript, Go, PostgreSQL, Kafka, Kubernetes, distributed systems, payments infrastructure, observability</div>
+<h2>Education</h2><div class='row'><strong>BS Computer Science</strong><span>2019</span></div><div class='co'>University of Illinois Urbana-Champaign</div>
