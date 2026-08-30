@@ -92,6 +92,10 @@ git clone https://github.com/bhargava-gumpula/dossier.git
 cd dossier
 npm install
 npx playwright install chromium     # the real browser used to read and fill forms
+
+# The dashboard is served as a built bundle, and the build output is not in the
+# repo - without this step the dashboard answers with nothing.
+cd dashboard && npm install && npm run build && cd ..
 ```
 
 Start TrueForge, then the four local processes. **Two of them need `DOSSIER_ALLOW_ORIGINS`**, or
