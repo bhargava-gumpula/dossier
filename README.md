@@ -194,14 +194,54 @@ this repository.
 ## Security notes
 
 - **Egress guard.** Tools that fetch URLs refuse cloud metadata endpoints, `file://`, and the
-  local TrueForge control plane — so a malicious job posting cannot turn the browser into a
-  confused deputy against the host. Verified live (section 6).
+  local TrueForge control plane, so a malicious posting cannot use the agent to read the host's
+  private network. It denies private and loopback ranges rather than allowing a list of hosts, so
+  the open web still works. Verified live (section 6). Covered: the initial URL, every hop of a
+  server-side redirect, every page subresource, and wherever the page finally lands. The precise
+  limit is worth stating — on a redirect the request is still *issued* before the destination is
+  known, so a blocked hop stops the contents being reported, not the packet being sent. Blind
+  timing remains observable; content does not come back.
 - **No CAPTCHA solving and no account creation.** Both walls are reported honestly instead.
 - **No secrets in the repo.** All three credentials live in TrueForge's own local database.
 
 ## Qodo Code Review Evidence
 
-<!-- FILLED IN AFTER THE QODO REVIEW RUNS ON PR #2, BEFORE MERGE -->
+Every substantive change in this project went through
+**[PR #2](https://github.com/bhargava-gumpula/dossier/pull/2)** (40 files, ~7,300 lines), which
+was reviewed by **Qodo** via `/agentic_review` and merged only afterwards. `main` is
+branch-protected with `enforce_admins: true`, so nothing reaches it any other way.
+
+Qodo raised **26 findings**. Five were already fixed by later commits on the branch and one was
+outdated by the time the review settled, leaving **20 live**. Six were acted on before merge;
+the rest were triaged and left, deliberately.
+
+**What Qodo caught that was real, and what changed:**
+
+| # | Finding | What it actually was | Outcome |
+| --- | --- | --- | --- |
+| 9 | Browser redirects bypass the egress guard | **The important one.** The guard checked the URL it was handed, then `page.goto` followed redirects anywhere. A public posting could bounce the browser onto loopback and have the contents read back — the confused-deputy case the guard exists to prevent. | Fixed |
+| 14 | Oversized bodies hang the request | `req.destroy()` emits neither `end` nor reliably `error`, so the promise never settled and the connection hung forever. Both MCP servers. | Fixed |
+| 26 | Negative limit expands results | `slice(0, -1)` means "all but the last", so asking for `-1` jobs returned nearly all of them. | Fixed |
+| 15 | Slug drops "the" | `"The Browser Company"` — the example in the comment directly above the function — probed `browsercompany`, never `thebrowsercompany`, which is the real board. | Fixed |
+| 24 | Demo response enables XSS | The local sink echoed the submitted name into HTML unescaped. | Fixed |
+| 23 | Demo route blocked by default | The allowlist is empty by default and the demo needs it, which was nowhere documented. | Documented, not changed — defaulting it open would undo the property that makes the guard worth having |
+
+The #9 fix is worth one more note, because the obvious version of it does not work. A
+context-level `route` handler covers subresources, but Playwright raises **no route event for a
+main-frame redirect** — Chromium follows the `30x` internally. That was proved with a test before
+anything depended on it. The redirect chain is therefore walked *after* navigation via
+`redirectedFrom()`, and any blocked hop makes the tool report nothing about the page. Verified
+A/B: with the destination not allowlisted the tool returns 0 fields and `wall: blocked`; with it
+allowlisted, the same navigation returns all 3.
+
+**What was left, and why.** The remaining 14 are recorded on the PR. They cluster into: races on
+the dashboard's JSON queue if several applications are started at once (#1, #20, #21); status
+reporting at edges of the approval flow (#2, #3, #4, #7, #8); DNS rebinding and DNS resolution
+falling outside the request timeout (#10, #25); and smaller correctness items (#6, #11, #16,
+#22). They are genuine, and several need real work — request-level locking, resolve-then-pin
+address handling — rather than a patch. Against a hard deadline, on a single-operator local tool
+with a working demo to record, taking them was the wrong trade. Naming them is more useful than
+quietly shipping past them.
 
 ## AI assistance disclosure
 
