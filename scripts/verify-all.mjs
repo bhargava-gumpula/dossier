@@ -258,19 +258,34 @@ while (waited < 240000) {
 // agent redoing its work.
 //
 // Decide meta-ness from the real function name, then resolve the logical name.
+//
+// There are two ways a tool actually gets invoked, and both must be counted.
+// Directly, as call_tool with the name in arguments.tool_name; or from inside
+// the sandbox, where the agent shells out and the name appears only in the
+// command it runs:
+//
+//   mcp-client call-tool dossier-apply inspect_form '{"apply_url":"..."}'
+//
+// An exec that merely cats a file back is not a tool call and contributes
+// nothing. Returns a list because one command can invoke more than one tool.
 const META = ['list_tools', 'get_tool_info', 'get_tool_output_schema'];
-function invokedTool(c) {
+const MCP_CLI = /mcp-client\s+call-tool\s+\S+\s+([A-Za-z_][A-Za-z0-9_]*)/g;
+function invokedTools(c) {
   const fn = c.function?.name;
-  if (META.includes(fn)) return null;
+  if (META.includes(fn)) return [];
   let a = {}; try { a = JSON.parse(c.function?.arguments ?? '{}'); } catch {}
-  return a.tool_name ?? fn ?? null;
+  if (fn === 'exec') {
+    const cmd = String(a.command ?? '');
+    return [...cmd.matchAll(MCP_CLI)].map((m) => m[1]);
+  }
+  const n = a.tool_name ?? fn;
+  return n ? [n] : [];
 }
 
 const events = (await tf('GET', `/sessions/${session.id}/turns/${turn.id}/events`)).data ?? [];
 const used = new Set();
 for (const e of events) for (const c of ((e.event ?? e).tool_calls ?? [])) {
-  const n = invokedTool(c);
-  if (n) used.add(n);
+  for (const n of invokedTools(c)) used.add(n);
 }
 t('used detect_apply_route', used.has('detect_apply_route'));
 t('used get_candidate_profile', used.has('get_candidate_profile'));
@@ -289,8 +304,7 @@ for (const e of events) for (const c of ((e.event ?? e).tool_calls ?? [])) {
   // event echoing its id. Deduping by id keeps that from reading as two calls.
   if (c.id && seenCall.has(c.id)) continue;
   if (c.id) seenCall.add(c.id);
-  const n = invokedTool(c);
-  if (n) calls.push(n);
+  calls.push(...invokedTools(c));
 }
 const submits = calls.filter((c) => c === 'submit_form').length;
 t('exactly one submit_form call', submits === 1, `${submits} calls`);
@@ -318,8 +332,7 @@ if (gate) {
   const postEvents = (await tf('GET', `/sessions/${session.id}/turns/${lastTurn.id}/events`)).data ?? [];
   const postCalls = [];
   for (const e of postEvents) for (const c of ((e.event ?? e).tool_calls ?? [])) {
-    const n = invokedTool(c);
-    if (n) postCalls.push(n);
+    postCalls.push(...invokedTools(c));
   }
   t('no tool calls after approval', postCalls.length === 0, postCalls.join(', ') || 'none');
 
