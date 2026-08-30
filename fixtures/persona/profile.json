@@ -35,14 +35,7 @@
         "Led the ledger service rewrite that cut settlement latency from 900ms to 210ms at p99.",
         "Built the idempotency layer handling 40M payment intents per month with zero double-charges in 18 months.",
         "Owned on-call for the payments core; reduced page volume 60% by fixing retry storms at the source.",
-        "Cut cloud spend 28% by right-sizing the ledger service fleet with Terraform-managed autoscaling.",
-        "Verified end-to-end at 2026-08-30T02:35:07.885Z.",
-        "Verified end-to-end at 2026-08-30T02:36:48.163Z.",
-        "Verified end-to-end at 2026-08-30T02:41:24.662Z.",
-        "Verified end-to-end at 2026-08-30T03:21:41.785Z.",
-        "Verified end-to-end at 2026-08-30T03:25:11.324Z.",
-        "Verified end-to-end at 2026-08-30T03:28:02.584Z.",
-        "Verified end-to-end at 2026-08-30T03:41:04.626Z."
+        "Cut cloud spend 28% by right-sizing the ledger service fleet with Terraform-managed autoscaling."
       ]
     },
     {

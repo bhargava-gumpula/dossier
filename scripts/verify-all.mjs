@@ -170,8 +170,17 @@ t('new skill present', after.skills.includes(marker));
 t('original content preserved', before.skills.every((s) => after.skills.includes(s)), `${before.skills.length} kept`);
 t('previous version snapshotted', Boolean(edit.previous_version));
 
-// clean up so repeated runs do not accumulate
-await mcp(APPLY_MCP, 'update_profile', { edits: [{ op: 'remove_skill', value: marker }] });
+// Clean up so repeated runs do not accumulate. The skill was already removed
+// here; the bullet was not, so every run left one behind and the demo persona
+// had collected eight lines of "Verified end-to-end at ..." in the experience
+// that gets tailored, attached and shown. Matched on the shared prefix rather
+// than this run's exact text, so a run that died mid-way is mopped up too.
+await mcp(APPLY_MCP, 'update_profile', {
+  edits: [
+    { op: 'remove_skill', value: marker },
+    { op: 'remove_bullet', company: 'Meridian Payments', value: 'Verified end-to-end at' },
+  ],
+});
 
 // --------------------------------------------- 9b. readiness contract (Phase 7)
 section('9b. Readiness is decided by the tool, not re-derived');
