@@ -124,13 +124,16 @@ export default function Dashboard({ onHome }) {
           </div>}
           {jobs.map((j) => {
             const st = j.live?.status ?? 'found';
+            // "blocked: captcha" would otherwise become the classes "blocked:"
+            // and "captcha", so the pill lost its colour entirely.
+            const stClass = st.split(':')[0].trim();
             return (
               <div key={j.id} className={`job${j.id === selId ? ' sel' : ''}`}
                 onClick={() => { setSelId(j.id); setView('job'); }}>
                 <div className="job-title">{j.title}</div>
                 {j.company && <div className="job-co">{j.company}</div>}
                 <div className="job-foot">
-                  <span className={`pill ${st}`}>{LABEL[st] ?? st}</span>
+                  <span className={`pill ${stClass}`}>{LABEL[st] ?? st}</span>
                   {st === 'found' && (
                     <button className="btn ghost" style={{ padding: '3px 10px', fontSize: 12 }}
                       onClick={(e) => { e.stopPropagation(); act('/api/jobs/start', { id: j.id }); }}>
@@ -218,6 +221,45 @@ function Detail({ job, profile, tab, setTab, act, busy, refresh }) {
                     Send
                   </button>
                 </div>
+              </div>
+            )}
+
+            {live.fillResult?.wall && !live.submitResult?.submitted && (
+              <div className="card wall">
+                <h3>This one needs you</h3>
+                <div className="q">
+                  {live.fillResult.handoff?.why ?? 'a wall blocks automated submission'} —
+                  so the agent stopped and filled nothing further.
+                  <strong> Nothing has been sent.</strong>
+                </div>
+                <div className="warn">
+                  The form was filled in a headless browser you cannot type into, so it has
+                  to be finished by hand. Every answer it worked out is below — you should
+                  not have to think about any of them again.
+                </div>
+
+                {live.fillResult.handoff?.completeAt && (
+                  <div className="picker-actions">
+                    <a className="btn primary" href={live.fillResult.handoff.completeAt}
+                      target="_blank" rel="noreferrer">Open the form and finish it</a>
+                    {live.resumeAvailable && (
+                      <a className="btn" href={`/api/jobs/resume?id=${job.id}`}
+                        target="_blank" rel="noreferrer">Download the tailored résumé</a>
+                    )}
+                  </div>
+                )}
+
+                {live.fillResult.handoff?.answers?.length > 0 && (
+                  <div className="handoff">
+                    <div className="handoff-h">What to enter</div>
+                    {live.fillResult.handoff.answers.map((a, i) => (
+                      <div className="handoff-row" key={i}>
+                        <span className="handoff-k">{a.field}</span>
+                        <span className="handoff-v">{String(a.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

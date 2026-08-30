@@ -100,6 +100,26 @@
 }
 .card.ask h3 { color: var(--amber); }
 
+/* A wall the agent cannot legitimately pass. Red, because the application is
+   genuinely not going anywhere until a person finishes it by hand. */
+.card.wall {
+  border-color: color-mix(in srgb, var(--red) 38%, var(--lx-line-strong));
+  background: color-mix(in srgb, var(--red) 7%, transparent);
+}
+.card.wall h3 { color: var(--red); }
+.handoff { margin-top: 16px; border-top: 1px solid var(--lx-line); }
+.handoff-h {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--lx-fg-3); font-weight: 600; margin: 14px 0 10px;
+}
+.handoff-row {
+  display: grid; grid-template-columns: minmax(120px, 34%) 1fr; gap: 14px;
+  padding: 6px 0; border-bottom: 1px solid var(--lx-line); font-size: 13.5px;
+}
+.handoff-row:last-child { border-bottom: 0; }
+.handoff-k { color: var(--lx-fg-3); letter-spacing: -0.012em; }
+.handoff-v { color: var(--lx-fg); word-break: break-word; user-select: all; }
+
 .steps { display: flex; flex-direction: column; gap: 9px; }
 .step { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--lx-fg-2); letter-spacing: -0.015em; }
 .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex-shrink: 0; }

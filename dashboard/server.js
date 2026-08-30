@@ -94,6 +94,7 @@ async function jobLive(job) {
   let resumePath = null;
   let tailoring = null;
   let submitResult = null;
+  let fillResult = null;
   let turnError = null;
   for (const entry of events) {
     const ev = entry.event ?? entry;
@@ -122,6 +123,24 @@ async function jobLive(job) {
         if (typeof parsed.submitted === 'boolean') {
           submitResult = { submitted: parsed.submitted, wall: parsed.wall ?? null,
                            error: parsed.error ?? null, mode: parsed.mode ?? null };
+        }
+      } catch { /* not the response we're after */ }
+    }
+    // fill_form's verdict. A wall is discovered HERE, not at submit time -
+    // submit_form is correctly never called once one is found - so reading only
+    // submit_form left a CAPTCHA-blocked application reporting "ready". It also
+    // carries the handoff: where to finish by hand, and every value already
+    // worked out, so the human re-types nothing.
+    if (payload && typeof payload === 'string' && payload.includes('"ready_to_submit"')) {
+      try {
+        const parsed = JSON.parse(payload);
+        if (typeof parsed.ready_to_submit === 'boolean') {
+          fillResult = {
+            readyToSubmit: parsed.ready_to_submit,
+            wall: parsed.wall ?? null,
+            blocking: parsed.blocking ?? [],
+            handoff: parsed.handoff ?? null,
+          };
         }
       } catch { /* not the response we're after */ }
     }
@@ -166,6 +185,11 @@ async function jobLive(job) {
     // this project must not tell. A refusal is surfaced as its wall instead.
     status = submitResult?.submitted === true ? 'submitted'
       : submitResult?.wall ? `blocked: ${submitResult.wall}`
+      // A wall found while filling blocks submission just as hard, and it is
+      // the usual case: the agent is told not to call submit_form at all once
+      // it sees one. Without this the run read "ready", which is the opposite
+      // of the truth - nobody can submit it without doing the CAPTCHA by hand.
+      : fillResult?.wall ? `blocked: ${fillResult.wall}`
       : job.approved ? 'not-submitted'
       : 'ready';
   }
@@ -196,6 +220,7 @@ async function jobLive(job) {
     steps,
     output,
     submitResult,
+    fillResult,
     turnError,
   };
 }
