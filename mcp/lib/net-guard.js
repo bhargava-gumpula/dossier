@@ -10,10 +10,15 @@
 import { lookup } from 'node:dns/promises';
 import net from 'node:net';
 
-const ALLOWED = new Set(
-  (process.env.DOSSIER_ALLOW_ORIGINS ?? '')
-    .split(',').map((s) => s.trim()).filter(Boolean),
-);
+// Read at call time, not at import time. ES imports are hoisted and evaluated
+// before any statement in the importing module, so snapshotting the environment
+// here would ignore anything a caller sets before invoking us.
+function allowed() {
+  return new Set(
+    (process.env.DOSSIER_ALLOW_ORIGINS ?? '')
+      .split(',').map((s) => s.trim()).filter(Boolean),
+  );
+}
 
 export function isBlockedIp(ip) {
   if (net.isIPv4(ip)) {
@@ -43,7 +48,7 @@ export async function assertAllowedUrl(raw) {
   if (u.protocol !== 'http:' && u.protocol !== 'https:') {
     throw new Error(`blocked scheme: ${u.protocol}`);
   }
-  if (ALLOWED.has(u.origin)) return u; // explicitly allowed demo target
+  if (allowed().has(u.origin)) return u; // explicitly allowed demo target
 
   const host = u.hostname.replace(/^\[|\]$/g, '');
   if (net.isIP(host)) {
@@ -61,4 +66,4 @@ export async function assertAllowedUrl(raw) {
   return u;
 }
 
-export function allowedOrigins() { return [...ALLOWED]; }
+export function allowedOrigins() { return [...allowed()]; }
