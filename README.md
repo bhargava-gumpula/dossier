@@ -131,17 +131,17 @@ bash scripts/verify-sandbox.sh
 
 Proves the agent's execution is genuinely remote, rather than quietly running on the host.
 
-**Current state: 58–59 of 62 pass.** The variance is honest and worth naming:
+**One known source of variance, named rather than hidden.** Section 10 runs the real agent, and
+a model that retries after a transient MCP error can call `submit_form` twice; the approved
+submission then does not land and three assertions fail together. It is model-dependent —
+noticeably more frequent on `claude-haiku-4-5`, which was used to keep iteration cheap. A clean
+run shows exactly `get_candidate_profile → detect_apply_route → inspect_form → tailor_resume →
+fill_form → submit_form`: one submit, nothing after approval.
 
-- **Section 10** (full agent run) can fail when the agent retries after a transient MCP error and
-  calls `submit_form` twice. It is model-dependent — noticeably more frequent on
-  `claude-haiku-4-5`, which was used to keep iteration cheap. A clean run shows exactly
-  `get_candidate_profile → detect_apply_route → inspect_form → tailor_resume → fill_form →
-  submit_form`, one submit, nothing after approval.
-- **Section 3** (`Nutanix → jobvite`) intermittently reports *not found* when Jobvite drops the
-  connection; the parser is fine and the same call returns 109 jobs on a retry.
-
-Neither is a product defect, but both are real flakes and are documented rather than hidden.
+Worth knowing when reading a failure there: the *tailored résumé was sent* assertion inspects the
+last record in the sink, so when the submit does not land it reports a stale record from an
+earlier run and fails as a consequence of the first failure, not on its own. Tailoring is proven
+independently by sections 9b and 9c.
 
 ---
 

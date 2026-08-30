@@ -163,21 +163,42 @@ export async function workdayJobs(slug, { limit = 20, maxJobs = 200 } = {}) {
 // Jobvite publishes no JSON feed, but its board pages carry a stable link shape
 // (/{company}/job/{id}) with the title in the anchor text, so the listing can be
 // read from the HTML without a browser. Nutanix is on Jobvite.
-export async function jobviteJobs(slug) {
-  const url = `https://jobs.jobvite.com/${encodeURIComponent(slug)}`;
-  let html;
-  try {
+//
+// Jobvite intermittently drops the connection instead of answering, which the
+// old single-shot fetch reported as "this company has no Jobvite board" - so
+// Nutanix resolved to nothing on roughly one call in three. A transport failure
+// is not an answer, so it is retried once.
+//
+// This costs nothing on the common path. A company that is genuinely not on
+// Jobvite still redirects to Jobvite's support page and answers 200, so the
+// fetch succeeds, the link regex finds nothing, and we return null without a
+// second request. Only a thrown fetch - the actual blip - is retried.
+async function getBoardHtml(url, attempts = 2) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 12000);
-    const res = await fetch(url, {
-      redirect: 'follow',
-      headers: { 'user-agent': UA, accept: 'text/html' },
-      signal: ctl.signal,
-    });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    html = await res.text();
-  } catch { return null; }
+    try {
+      const res = await fetch(url, {
+        redirect: 'follow',
+        headers: { 'user-agent': UA, accept: 'text/html' },
+        signal: ctl.signal,
+      });
+      if (!res.ok) return null;
+      return await res.text();
+    } catch {
+      if (attempt === attempts) return null;
+      await new Promise((r) => setTimeout(r, 400));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return null;
+}
+
+export async function jobviteJobs(slug) {
+  const url = `https://jobs.jobvite.com/${encodeURIComponent(slug)}`;
+  const html = await getBoardHtml(url);
+  if (!html) return null;
 
   const re = new RegExp(
     `<a[^>]+href="(/${slug}/job/([A-Za-z0-9]+))"[^>]*>([\\s\\S]{0,200}?)</a>`, 'gi');
