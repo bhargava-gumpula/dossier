@@ -1,0 +1,116 @@
+/* Apple front-page: sticky blurred nav, enormous silence between chapters,
+   one accent colour, and reveals that rise rather than bounce. */
+
+.nav {
+  position: sticky; top: 0; z-index: 50; height: var(--nav-h);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.nav-inner {
+  max-width: 1024px; margin: 0 auto; padding: 0 22px; height: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.nav-links { display: flex; align-items: center; gap: 26px; }
+.nav-links a { font-size: 12.5px; color: var(--fg-2); letter-spacing: -0.005em; }
+.nav-links a:hover { color: var(--fg); text-decoration: none; }
+.nav-cta {
+  font-size: 12.5px; color: #fff; background: var(--blue);
+  padding: 5px 13px; border-radius: 980px; font-weight: 450;
+}
+.nav-cta:hover { background: var(--blue-press); }
+
+.hero { padding: 88px 0 0; text-align: center; overflow: hidden; }
+.hero .t-eyebrow { margin-bottom: 12px; }
+.hero-sub { max-width: 620px; margin: 20px auto 0; }
+.hero-cta { display: flex; gap: 14px; justify-content: center; margin-top: 30px; }
+
+/* Product shot: a real device-ish frame, floated on a soft gradient. */
+.hero-art { margin-top: 66px; padding: 0 22px 90px; }
+.chrome {
+  max-width: 1000px; margin: 0 auto; border-radius: 20px; overflow: hidden;
+  background: var(--surface-3); border: 1px solid var(--line);
+  box-shadow: 0 40px 90px -30px rgba(0,0,0,.32), 0 8px 24px -12px rgba(0,0,0,.18);
+}
+.chrome-bar {
+  height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 14px;
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+  border-bottom: 1px solid var(--line);
+}
+.chrome-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.chrome-body { display: grid; grid-template-columns: 260px 1fr; min-height: 300px; text-align: left; }
+
+.mock-rail { border-right: 1px solid var(--line); padding: 12px; background: var(--surface-2); }
+.mock-row {
+  padding: 11px 12px; border-radius: 10px; font-size: 13px; font-weight: 500;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.mock-row.on { background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.tag {
+  font-size: 10px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 980px; font-style: normal; align-self: flex-start;
+}
+.tag.violet { background: color-mix(in srgb, var(--violet) 15%, transparent); color: var(--violet); }
+.tag.amber  { background: color-mix(in srgb, var(--amber) 16%, transparent);  color: var(--amber); }
+.tag.green  { background: color-mix(in srgb, var(--green) 15%, transparent);  color: var(--green); }
+
+.mock-pane { padding: 20px 22px; }
+.mock-gate {
+  border: 1px solid color-mix(in srgb, var(--violet) 40%, var(--line));
+  border-radius: 14px; padding: 16px 18px;
+  background: color-mix(in srgb, var(--violet) 6%, transparent);
+}
+.mock-gate-h { font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--violet); }
+.mock-gate-b { font-size: 14px; margin-top: 8px; color: var(--fg-2); }
+.mock-gate-b strong { color: var(--fg); font-weight: 600; }
+.mock-actions { display: flex; gap: 8px; margin-top: 14px; }
+.mock-btn { font-size: 12.5px; padding: 6px 14px; border-radius: 980px; border: 1px solid var(--line); color: var(--fg-2); }
+.mock-btn.blue { background: var(--blue); color: #fff; border-color: var(--blue); }
+.mock-steps { margin-top: 18px; display: flex; flex-direction: column; gap: 9px; }
+.mock-step { font-size: 12.5px; color: var(--fg-3); display: flex; align-items: center; gap: 9px; }
+.mock-step i { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+
+/* Chapters, separated by a lot of nothing — the most Apple thing there is. */
+.band { padding: 118px 0; text-align: center; }
+.band.alt { background: var(--surface-2); }
+.band.dark { background: var(--ink); color: #f5f5f7; }
+.band.dark .t-body, .band.dark .t-sub { color: #a1a1a6; }
+.band-sub { max-width: 660px; margin: 22px auto 0; }
+
+.routes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; margin-top: 56px; text-align: left; }
+.route { background: var(--surface-2); border-radius: var(--radius); padding: 24px 22px; }
+.band.alt .route { background: var(--surface); }
+.route h3 { font-size: 19px; font-weight: 600; letter-spacing: -0.015em; }
+.route p { font-size: 14.5px; color: var(--fg-2); margin-top: 8px; line-height: 1.5; }
+
+.stat-row { display: flex; gap: 60px; justify-content: center; margin-top: 60px; flex-wrap: wrap; }
+.stat-row div { display: flex; flex-direction: column; gap: 6px; }
+.stat-row b { font-size: 56px; font-weight: 650; letter-spacing: -0.03em; line-height: 1; }
+.stat-row span { font-size: 14px; color: #a1a1a6; }
+
+.walls { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; margin-top: 56px; text-align: left; }
+.wall { border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 22px; }
+.wall h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.wall p { font-size: 14.5px; color: var(--fg-2); margin-top: 7px; }
+
+.prompt-demo {
+  max-width: 640px; margin: 48px auto 0; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px 20px; font-size: 16px; color: var(--fg-2);
+  display: flex; gap: 12px; align-items: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,.05);
+}
+.prompt-caret { color: var(--blue); font-weight: 600; }
+
+.closer { padding: 130px 0; text-align: center; }
+.foot { padding: 40px 0 60px; border-top: 1px solid var(--line); text-align: center; }
+
+@media (max-width: 760px) {
+  .chrome-body { grid-template-columns: 1fr; }
+  .mock-rail { border-right: 0; border-bottom: 1px solid var(--line); }
+  .nav-links a { display: none; }
+  .band { padding: 84px 0; }
+  .stat-row { gap: 34px; }
+}

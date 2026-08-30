@@ -1,0 +1,103 @@
+/* Apple-derived design tokens, shared by the landing page and the dashboard so
+   the two read as one product rather than two apps that happen to be adjacent. */
+:root {
+  /* Apple's actual neutrals */
+  --ink:        #1d1d1f;
+  --ink-2:      #6e6e73;
+  --ink-3:      #86868b;
+  --paper:      #ffffff;
+  --paper-2:    #f5f5f7;
+  --paper-3:    #fbfbfd;
+  --hairline:   #d2d2d7;
+  --blue:       #0071e3;
+  --blue-press: #0077ed;
+  --green:      #1d8f4e;
+  --amber:      #a25c00;
+  --violet:     #6e56cf;
+  --red:        #d70015;
+
+  --surface:    var(--paper);
+  --surface-2:  var(--paper-2);
+  --surface-3:  var(--paper-3);
+  --fg:         var(--ink);
+  --fg-2:       var(--ink-2);
+  --fg-3:       var(--ink-3);
+  --line:       var(--hairline);
+
+  --radius:     18px;
+  --radius-sm:  12px;
+  --nav-h:      48px;
+
+  /* Apple's display face, with honest fallbacks */
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface:   #000000;
+    --surface-2: #101012;
+    --surface-3: #1d1d1f;
+    --fg:        #f5f5f7;
+    --fg-2:      #a1a1a6;
+    --fg-3:      #86868b;
+    --line:      #2a2a2c;
+    --blue:      #2997ff;
+    --blue-press:#4aa8ff;
+    --green:     #30d158;
+    --amber:     #ffd426;
+    --violet:    #a78bfa;
+    --red:       #ff453a;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--surface);
+  color: var(--fg);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.47;
+  letter-spacing: -0.012em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input, textarea, select { font: inherit; color: inherit; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Apple's headline scale: heavy weight, very tight tracking, tight leading. */
+.t-hero    { font-size: clamp(40px, 6.4vw, 80px); font-weight: 700; line-height: 1.05; letter-spacing: -0.025em; }
+.t-section { font-size: clamp(32px, 4.4vw, 56px); font-weight: 650; line-height: 1.08; letter-spacing: -0.022em; }
+.t-sub     { font-size: clamp(19px, 2.1vw, 28px); font-weight: 450; line-height: 1.25; letter-spacing: -0.01em; color: var(--fg-2); }
+.t-eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--blue); text-transform: none; }
+.t-body    { font-size: 19px; line-height: 1.55; color: var(--fg-2); }
+.t-caption { font-size: 13px; line-height: 1.4; color: var(--fg-3); }
+
+.btn-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--blue); color: #fff;
+  padding: 11px 22px; border-radius: 980px;
+  font-size: 16px; font-weight: 450; letter-spacing: -0.01em;
+  transition: background .18s ease, transform .18s ease;
+}
+.btn-pill:hover { background: var(--blue-press); text-decoration: none; }
+.btn-pill:active { transform: scale(.98); }
+.btn-pill.ghost {
+  background: transparent; color: var(--blue);
+  border: 1px solid var(--blue); 
+}
+.btn-pill.ghost:hover { background: color-mix(in srgb, var(--blue) 8%, transparent); }
+
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 22px; }
+.wrap-wide { max-width: 1240px; margin: 0 auto; padding: 0 22px; }
+
+/* Apple scroll reveal: rise and fade, never bounce. */
+.reveal { opacity: 0; transform: translateY(28px); transition: opacity .8s cubic-bezier(.28,.11,.32,1), transform .8s cubic-bezier(.28,.11,.32,1); }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
