@@ -195,3 +195,37 @@
 .position-loc { font-size: 12.5px; color: var(--fg-3); }
 
 .picker-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+/* -------------------------------------------------- résumé upload + preview */
+.upload { display: inline-flex; align-items: center; }
+.upload input { display: none; }
+.upload span {
+  padding: 8px 16px; border-radius: 980px; font-size: 13.5px;
+  background: var(--surface); border: 1px solid var(--line); cursor: pointer;
+  transition: border-color .14s;
+}
+.upload span:hover { border-color: var(--blue); }
+
+.upload-result {
+  margin-top: 14px; padding: 14px 16px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--line); font-size: 14px;
+}
+.upload-skim { display: flex; flex-wrap: wrap; gap: 14px; margin: 8px 0 12px; color: var(--fg-3); font-size: 13px; }
+
+.tailor-summary {
+  margin-top: 14px; padding: 12px 14px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--line); font-size: 13.5px; line-height: 1.6;
+}
+.tailor-summary b { color: var(--fg-3); font-weight: 600; margin-right: 6px; }
+.tailor-summary .refused { color: var(--amber); margin-top: 4px; }
+
+.resume-preview { margin-top: 16px; }
+.resume-preview-h {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--fg-3); font-weight: 650; margin-bottom: 8px;
+}
+.resume-preview iframe {
+  width: 100%; height: 420px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); background: #fff;
+}
+.resume-preview .btn { margin-top: 8px; padding: 4px 0; }

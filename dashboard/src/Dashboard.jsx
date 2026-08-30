@@ -214,7 +214,31 @@ function Detail({ job, profile, tab, setTab, act, busy, refresh }) {
                   The agent has filled this application and is waiting to submit it.
                   <strong> Nothing has been sent.</strong>
                 </div>
-                <div className="warn">Submitting is irreversible — an application cannot be recalled.</div>
+                <div className="warn">
+                  {live.mode === 'live'
+                    ? 'Submitting is irreversible — an application cannot be recalled.'
+                    : 'Dry run: the real payload is captured locally, not sent to the employer.'}
+                </div>
+
+                {live.tailoring && (
+                  <div className="tailor-summary">
+                    <div><b>Leading with</b> {live.tailoring.ledWith.join(', ') || '—'}</div>
+                    {live.tailoring.refused?.length > 0 && (
+                      <div className="refused">
+                        <b>Refused as unsupported</b> {live.tailoring.refused.join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {live.resumeAvailable && (
+                  <div className="resume-preview">
+                    <div className="resume-preview-h">The résumé that will be attached</div>
+                    <iframe title="résumé" src={`/api/jobs/resume?id=${job.id}&t=${live.turnId ?? ''}`} />
+                    <a className="btn ghost" href={`/api/jobs/resume?id=${job.id}`}
+                       target="_blank" rel="noreferrer">Open full size</a>
+                  </div>
+                )}
                 <div className="reason" style={{ marginTop: 12 }}>
                   <input value={reason} onChange={(e) => setReason(e.target.value)}
                     placeholder="Reason, if you're sending it back…" style={{ width: '100%' }} />
@@ -259,6 +283,47 @@ function ResumePanel({ profile, refresh }) {
   const [prompt, setPrompt] = useState('');
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState('');
+  const [upload, setUpload] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  // An uploaded document only matters once it reaches the profile - that is what
+  // tailoring reorders. So the text goes to the agent, which decides what
+  // becomes a claim, and every edit it makes is versioned.
+  const onFile = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setUploading(true); setUpload(null); setResult('');
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const res = await fetch('/api/profile/upload', { method: 'POST', body: fd });
+      const d = await res.json();
+      if (d.error) throw new Error(d.error);
+      setUpload(d);
+    } catch (err) { setResult(`Upload failed: ${err.message}`); }
+    finally { setUploading(false); e.target.value = ''; }
+  };
+
+  const ingest = async () => {
+    if (!upload) return;
+    setRunning(true); setResult('');
+    try {
+      const { sessionId, turnId } = await api('/api/profile/prompt', {
+        prompt:
+          'Here is the text of my résumé. Turn it into my profile using update_profile: ' +
+          'add my real skills, employers and accomplishments. Only record what the text ' +
+          'actually says — do not embellish.\n\n' + upload.text,
+      });
+      for (let i = 0; i < 90; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const s = await api(`/api/profile/status?session=${sessionId}&turn=${turnId}`);
+        if (['done', 'failed', 'error'].includes(s.status)) { setResult(s.output || '(no output)'); break; }
+      }
+      setUpload(null);
+      refresh();
+    } catch (e) { setResult(`Error: ${e.message}`); }
+    finally { setRunning(false); }
+  };
 
   const send = async () => {
     if (!prompt.trim()) return;
@@ -280,6 +345,30 @@ function ResumePanel({ profile, refresh }) {
 
   return (
     <>
+      <div className="card">
+        <h3>Upload a résumé or details</h3>
+        <label className="upload">
+          <input type="file" accept=".pdf,.txt,.md,.docx,.doc,.rtf" onChange={onFile} disabled={uploading} />
+          <span>{uploading ? 'Reading…' : 'Choose a file'}</span>
+        </label>
+        <div className="warn" style={{ color: 'var(--fg-3)' }}>
+          PDF, Word or plain text. Stored outside the repository, never committed.
+        </div>
+        {upload && (
+          <div className="upload-result">
+            <div><b>{upload.filename}</b> — {(upload.bytes / 1024).toFixed(0)} KB, read with {upload.extracted_with}</div>
+            <div className="upload-skim">
+              {upload.skim.likelyName && <span>{upload.skim.likelyName}</span>}
+              {upload.skim.emails?.[0] && <span>{upload.skim.emails[0]}</span>}
+              {upload.skim.sectionsFound?.length > 0 && <span>{upload.skim.sectionsFound.join(' · ')}</span>}
+            </div>
+            <button className="btn primary" onClick={ingest} disabled={running}>
+              {running ? 'Adding to profile…' : 'Add this to my profile'}
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <h3>Ask for a change</h3>
         <div className="resume-prompt">

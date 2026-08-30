@@ -12,6 +12,7 @@
     "verify:sandbox": "bash scripts/verify-sandbox.sh"
   },
   "dependencies": {
+    "pdf-parse": "^2.4.5",
     "playwright": "^1.49.0"
   }
 }

@@ -42,6 +42,8 @@ print(json.dumps({'manifest':{'type':'remote','name':sys.argv[1],'url':sys.argv[
   fi
 }
 
+# DOSSIER_MODEL lets you iterate on a cheap model and switch back for the real
+# run without editing the manifest. Agent turns are where the spend goes.
 register_agent() {
   local file="$1"
   local name
@@ -58,9 +60,10 @@ for a in json.load(sys.stdin).get('data',[]):
 
   if [ -n "$existing" ]; then
     python3 -c "
-import json,sys
-m=json.load(open(sys.argv[1]))
-print(json.dumps({'manifest':m['manifest']}))" "$file" \
+import json,os,sys
+m=json.load(open(sys.argv[1]))['manifest']
+if os.environ.get('DOSSIER_MODEL'): m['model']['name']=os.environ['DOSSIER_MODEL']
+print(json.dumps({'manifest':m}))" "$file" \
       | curl -fsS -X PUT "$BASE/agents/$existing" \
           -H 'content-type: application/json' --data-binary @- >/dev/null
     echo "  updated agent:         $name"

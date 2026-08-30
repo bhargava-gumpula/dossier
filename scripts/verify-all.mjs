@@ -123,6 +123,17 @@ if (searchable) {
   } catch (e) { t('Tesla page retrieved', false, String(e).slice(0, 50)); }
 }
 
+// ------------------------------------------------- 7b. resume intake (Phase 7)
+section('7b. Résumé upload and extraction');
+{
+  const { extractText, skimResume } = await import('../mcp/lib/resume-intake.js');
+  const r = await extractText(`${ROOT}fixtures/persona/resume.pdf`);
+  t('PDF text extracted', r.text.length > 300, `${r.text.length} chars via ${r.how}`);
+  const skim = skimResume(r.text);
+  t('contact details recovered', skim.emails.length > 0 && skim.phones.length > 0);
+  t('sections recognised', skim.sectionsFound.includes('experience'), skim.sectionsFound.join(', '));
+}
+
 // ------------------------------------------------------------ 8. form reading
 section('8. Form reading');
 const demoForm = await inspectForm(`${DEMO}/jobs/backend-engineer`, { screenshot: false });
@@ -162,6 +173,51 @@ t('previous version snapshotted', Boolean(edit.previous_version));
 // clean up so repeated runs do not accumulate
 await mcp(APPLY_MCP, 'update_profile', { edits: [{ op: 'remove_skill', value: marker }] });
 
+// --------------------------------------------- 9b. readiness contract (Phase 7)
+section('9b. Readiness is decided by the tool, not re-derived');
+{
+  const partial = await mcp(APPLY_MCP, 'fill_form', {
+    apply_url: `${DEMO}/jobs/backend-engineer`,
+    answers: { 'First Name': 'Avery', Email: 'avery.okonkwo@example.com' },
+  });
+  t('incomplete fill is not ready', partial.ready_to_submit === false,
+    `${partial.blocking?.length ?? 0} blocking`);
+  t('names the missing required fields',
+    (partial.blocking ?? []).some((b) => b.kind === 'missing-required'));
+
+  const complete = await mcp(APPLY_MCP, 'fill_form', {
+    apply_url: `${DEMO}/jobs/backend-engineer`,
+    answers: {
+      'First Name': 'Avery', 'Last Name': 'Okonkwo', Email: 'avery.okonkwo@example.com',
+      Phone: '+1 415 555 0142', 'Are you authorized to work in the US?': 'Yes',
+      'Why do you want to work at Northwind Robotics?': 'Six years on payments infrastructure.',
+    },
+  });
+  t('complete fill is ready', complete.ready_to_submit === true);
+
+  // Dry-run must capture, never send to the employer.
+  const dry = await mcp(APPLY_MCP, 'submit_form', { fill_id: complete.fillId });
+  t('dry-run captured, not sent', dry.mode === 'dry-run' && dry.submitted === true);
+  t('records the real destination', /jobs\/backend-engineer|\/apply/.test(dry.would_have_submitted_to ?? ''),
+    dry.would_have_submitted_to ?? '');
+  t('résumé travelled with it', (dry.files_sent ?? []).length > 0, (dry.files_sent ?? []).join(','));
+}
+
+// ------------------------------------------------- 9c. tailoring cannot invent
+section('9c. Tailoring reorders, never invents');
+{
+  const tl = await mcp(APPLY_MCP, 'tailor_resume', {
+    job_title: 'Verify Tailoring',
+    lead_skills: ['PostgreSQL', 'Fortran'],
+    lead_bullets: [{ company: 'Meridian Payments', match: 'ledger' }],
+  });
+  t('real skill promoted', (tl.led_with_skills ?? []).includes('PostgreSQL'));
+  t('unheld skill refused', (tl.rejected ?? []).some((r) => r.value === 'Fortran'));
+  t('nothing lost', tl.content_preserved === true);
+  t('original untouched', tl.original_untouched === true);
+  t('tailored PDF exists', Boolean(tl.resume_path) && statSync(tl.resume_path).size > 1000);
+}
+
 // ---------------------------------------------- 10. full apply run + the gate
 section('10. Full application run, and the gate (R4)');
 const receivedBefore = (await (await fetch(`${DEMO}/received`)).json()).count;
@@ -198,6 +254,24 @@ const required = state.required_actions ?? [];
 const gate = required.find((r) => r.type === 'tool.approval_required');
 t('APPROVAL GATE fired', Boolean(gate), gate ? 'submit_form held' : `pending: ${required[0]?.type ?? 'none'}`);
 
+// The loop bug, asserted directly: one submit, and no re-inspecting after filling.
+const calls = [];
+const seenCall = new Set();
+for (const e of events) for (const c of ((e.event ?? e).tool_calls ?? [])) {
+  // A held call appears twice in the stream: the invocation, then the approval
+  // event echoing its id. Deduping by id keeps that from reading as two calls.
+  if (c.id && seenCall.has(c.id)) continue;
+  if (c.id) seenCall.add(c.id);
+  let a = {}; try { a = JSON.parse(c.function?.arguments ?? '{}'); } catch {}
+  const n = a.tool_name ?? c.function?.name;
+  if (n && !['list_tools', 'get_tool_info', 'get_tool_output_schema'].includes(n)) calls.push(n);
+}
+const submits = calls.filter((c) => c === 'submit_form').length;
+t('exactly one submit_form call', submits === 1, `${submits} calls`);
+const firstFill = calls.indexOf('fill_form');
+const inspectAfterFill = firstFill >= 0 && calls.slice(firstFill).includes('inspect_form');
+t('no re-inspection after filling', !inspectAfterFill, calls.join(' → ').slice(0, 90));
+
 const midCount = (await (await fetch(`${DEMO}/received`)).json()).count;
 t('nothing submitted while held', midCount === receivedBefore, `${midCount} received`);
 
@@ -211,10 +285,30 @@ if (gate) {
   const afterCount = (await (await fetch(`${DEMO}/received`)).json()).count;
   t('submitted after approval', afterCount === receivedBefore + 1, `${afterCount} received`);
 
+  // After an approval the application is finished. Any further tool call is the
+  // stall the user reported - the agent redoing work it had already completed.
+  const resumeTurns = (await tf('GET', `/sessions/${session.id}/turns`)).data ?? [];
+  const lastTurn = resumeTurns[resumeTurns.length - 1];
+  const postEvents = (await tf('GET', `/sessions/${session.id}/turns/${lastTurn.id}/events`)).data ?? [];
+  const postCalls = [];
+  for (const e of postEvents) for (const c of ((e.event ?? e).tool_calls ?? [])) {
+    let a = {}; try { a = JSON.parse(c.function.arguments); } catch {}
+    const n = a.tool_name ?? c.function?.name;
+    if (n && !['list_tools', 'get_tool_info', 'get_tool_output_schema'].includes(n)) postCalls.push(n);
+  }
+  t('no tool calls after approval', postCalls.length === 0, postCalls.join(', ') || 'none');
+
   const last = (await (await fetch(`${DEMO}/received`)).json()).applications.at(-1);
-  t('résumé PDF attached', /resume\.pdf/.test(last?.fields?.resume ?? ''), last?.fields?.resume ?? '');
+  // A dry-run capture records uploads in `files`; a live submit puts the filename
+  // inline in `fields`. Accept either, since both are real submissions.
+  const attached = (last?.files ?? []).map((f) => f.filename).filter(Boolean).join(',')
+    || last?.fields?.resume || '';
+  t('résumé PDF attached', /\.pdf/i.test(attached), attached);
+  t('the TAILORED résumé was sent', /-/.test(attached) && !/^resume\.pdf$/.test(attached), attached);
   t('all required fields present',
     Boolean(last?.fields?.first_name && last?.fields?.email && last?.fields?.why));
+  t('dry-run recorded the real destination', Boolean(last?.intendedDestination),
+    last?.intendedDestination ?? '');
 }
 
 await closeBrowser();

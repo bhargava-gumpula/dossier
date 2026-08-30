@@ -9,7 +9,8 @@
 // harness is genuinely holding, via user.tool_approval.
 
 import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { extractText, storeUpload, skimResume } from '../mcp/lib/resume-intake.js';
 import { resolve, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +20,7 @@ const PORT = Number(process.env.DASHBOARD_PORT ?? 5174);
 const TF = (process.env.TRUEFORGE_BASE_URL ?? 'http://localhost:8790') + '/api/v1';
 const QUEUE = `${HERE}/queue.json`;
 const PROFILE = process.env.DOSSIER_PROFILE ?? `${ROOT}/fixtures/persona/profile.json`;
+const RESUME = process.env.DOSSIER_RESUME ?? `${ROOT}/fixtures/persona/resume.pdf`;
 const AGENT = 'dossier';
 const JOBS_MCP = `http://127.0.0.1:${process.env.JOBS_MCP_PORT ?? 8793}/mcp`;
 
@@ -75,6 +77,8 @@ async function jobLive(job) {
   const steps = [];
   let question = null;
   let approval = null;
+  let resumePath = null;
+  let tailoring = null;
   for (const entry of events) {
     const ev = entry.event ?? entry;
     for (const c of ev.tool_calls ?? []) {
@@ -92,6 +96,21 @@ async function jobLive(job) {
       steps.push({ label, id: c.id });
       if (label === 'submit_form') approval = { toolCallId: c.id, args };
     }
+    // tailor_resume reports the PDF that will actually be attached.
+    const payload = ev.content ?? ev.output;
+    if (payload && typeof payload === 'string' && payload.includes('resume_path')) {
+      try {
+        const parsed = JSON.parse(payload);
+        if (parsed.resume_path) {
+          resumePath = parsed.resume_path;
+          tailoring = {
+            ledWith: parsed.led_with_skills ?? [],
+            accomplishments: parsed.led_with_accomplishments ?? [],
+            refused: (parsed.rejected ?? []).map((r) => r.value ?? r.match).filter(Boolean),
+          };
+        }
+      } catch { /* not the response we're after */ }
+    }
   }
 
   let status = state.status === 'running' ? 'working' : (job.status ?? 'idle');
@@ -104,9 +123,17 @@ async function jobLive(job) {
     ? content.map((b) => b.text ?? '').join('')
     : (content ?? '');
 
+  if (resumePath) {
+    const q2 = loadQueue();
+    const row = q2.jobs.find((x) => x.id === job.id);
+    if (row && row.resumePath !== resumePath) { row.resumePath = resumePath; saveQueue(q2); }
+  }
+
   return {
     status,
     turnId: latest.id,
+    resumeAvailable: Boolean(resumePath || job.resumePath),
+    tailoring,
     threadId: pending?.thread_id ?? 'main',
     pendingType: pending?.type ?? null,
     pendingToolCallId: pending?.tool_calls?.[0]?.id ?? null,
@@ -266,6 +293,19 @@ const api = {
     return { removed: true };
   },
 
+  // Serve the resume that will actually be attached, so the gate is not approved
+  // blind. Falls back to the base resume when a job has no tailored variant.
+  async 'GET /api/jobs/resume'(_, url) {
+    const id = url.searchParams.get('id');
+    const q = loadQueue();
+    const job = q.jobs.find((j) => j.id === id);
+    const path = job?.resumePath && existsSync(job.resumePath)
+      ? job.resumePath
+      : (existsSync(RESUME) ? RESUME : null);
+    if (!path) throw new Error('no resume available');
+    return { __file: path, __type: 'application/pdf' };
+  },
+
   // Resume editing: runs a turn against the same agent, which owns update_profile.
   async 'POST /api/profile/prompt'(body) {
     const session = (await tf('POST', '/sessions', { agent: { name: AGENT } })).data;
@@ -280,6 +320,29 @@ const api = {
       stream: false,
     });
     return { sessionId: session.id, turnId: turn.data.id };
+  },
+
+  // Ingest an uploaded resume or details file. The profile is the source of
+  // truth, so the text has to reach it or tailoring stops working on real people.
+  async 'POST /api/profile/upload'(_, url, req) {
+    const { file } = await readMultipart(req);
+    if (!file) throw new Error('no file uploaded');
+    const stored = storeUpload(ROOT, file.filename, file.buffer);
+    let extracted;
+    try { extracted = await extractText(stored); }
+    catch (err) { throw new Error(`could not read ${file.filename}: ${err.message}`); }
+    const skim = skimResume(extracted.text);
+    return {
+      stored_at: stored,
+      filename: file.filename,
+      bytes: file.buffer.length,
+      extracted_with: extracted.how,
+      skim,
+      text: extracted.text.slice(0, 20000),
+      note:
+        'Stored outside the repository. Send the text to the agent to turn it into ' +
+        'profile data - it decides what becomes a claim, and every edit is versioned.',
+    };
   },
 
   async 'GET /api/profile/status'(_, url) {
@@ -299,6 +362,45 @@ const api = {
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
                '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
+// Just enough multipart to pull one uploaded file out, without a dependency.
+function readMultipart(req) {
+  return new Promise((resolve, reject) => {
+    const type = req.headers['content-type'] ?? '';
+    const m = type.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+    if (!m) return reject(new Error('not multipart'));
+    const boundary = `--${m[1] ?? m[2]}`;
+    const chunks = [];
+    req.on('data', (c) => { chunks.push(c); });
+    req.on('error', reject);
+    req.on('end', () => {
+      const buf = Buffer.concat(chunks);
+      const sep = Buffer.from(`\r\n${boundary}`);
+      const parts = [];
+      let start = buf.indexOf(Buffer.from(boundary)) + boundary.length;
+      while (start > boundary.length - 1) {
+        const end = buf.indexOf(sep, start);
+        if (end < 0) break;
+        parts.push(buf.subarray(start, end));
+        start = end + sep.length;
+      }
+      let file = null;
+      const fields = {};
+      for (const part of parts) {
+        const headEnd = part.indexOf('\r\n\r\n');
+        if (headEnd < 0) continue;
+        const head = part.subarray(0, headEnd).toString('utf8');
+        const content = part.subarray(headEnd + 4);
+        const name = head.match(/name="([^"]+)"/)?.[1];
+        const filename = head.match(/filename="([^"]*)"/)?.[1];
+        if (!name) continue;
+        if (filename) file = { field: name, filename, buffer: content };
+        else fields[name] = content.toString('utf8').trim();
+      }
+      resolve({ file, fields });
+    });
+  });
+}
+
 function body(req) {
   return new Promise((res, rej) => {
     let d = ''; req.on('data', (c) => { d += c; if (d.length > 5e6) req.destroy(); });
@@ -313,7 +415,16 @@ createServer(async (req, res) => {
 
   if (api[key]) {
     try {
-      const out = await api[key](req.method === 'GET' ? null : await body(req), url);
+      const isMultipart = (req.headers['content-type'] ?? '').startsWith('multipart/');
+      const parsed = req.method === 'GET' || isMultipart ? null : await body(req);
+      const out = await api[key](parsed, url, req);
+      if (out && out.__file) {
+        res.writeHead(200, {
+          'content-type': out.__type ?? 'application/octet-stream',
+          'content-length': statSync(out.__file).size,
+        });
+        return res.end(readFileSync(out.__file));
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify(out));
     } catch (err) {

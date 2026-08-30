@@ -16,7 +16,7 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { inspectForm, fillForm, getFill, dropFill } from './lib/browser.js';
+import { inspectForm, fillForm, getFill, dropFill, capturePayload } from './lib/browser.js';
 import { loadProfile, applyEdits, rebuildResume, snapshot, listHistory, tailorProfile, renderResumeHtml } from './lib/profile.js';
 import { mkdirSync } from 'node:fs';
 import { chromium as _chromium } from 'playwright';
@@ -30,6 +30,15 @@ const RESUME_PATH = process.env.DOSSIER_RESUME ?? `${ROOT}/fixtures/persona/resu
 const RESUME_HTML = RESUME_PATH.replace(/\.pdf$/, '.html');
 
 const PORT = Number(process.env.APPLY_MCP_PORT ?? 8794);
+
+// dry-run is the default on purpose. In dry-run the agent does everything a real
+// submission does - fills the real form, attaches the real resume, builds the
+// real payload - and then posts that payload to a local sink instead of the
+// employer, reporting where it would have gone. Nothing about the work is
+// simulated; only the destination changes. Sending for real needs this set to
+// "live" deliberately.
+const SUBMIT_MODE = (process.env.DOSSIER_SUBMIT_MODE ?? 'dry-run').toLowerCase();
+const CAPTURE_SINK = process.env.DOSSIER_CAPTURE_SINK ?? 'http://127.0.0.1:8795/capture';
 const PROTOCOL_VERSION = '2025-06-18';
 
 const TOOLS = [
@@ -154,7 +163,10 @@ const TOOLS = [
       'Submit a form that was previously filled with fill_form. THIS IS ' +
       'IRREVERSIBLE - it sends a real application to a real employer and it ' +
       'cannot be recalled. Requires the fill_id from fill_form. Refuses when a ' +
-      'CAPTCHA or account wall is present, because those are handed to the human.',
+      'CAPTCHA or account wall is present, because those are handed to the human.\n\n' +
+      'Call this at most ONCE per application, and only when fill_form reported ' +
+      'ready_to_submit: true. Once it has been approved and has run, the application ' +
+      'is finished - report the outcome and stop.',
     annotations: {
       title: 'Submit application', readOnlyHint: false, destructiveHint: true,
       idempotentHint: false, openWorldHint: true,
@@ -292,9 +304,55 @@ async function toolSubmitForm({ fill_id }) {
       error: 'unknown or expired fill_id. Re-run fill_form before submitting.',
     };
   }
-  const { page, url } = fill;
+  const { url } = fill;
+
+  // dry-run needs no browser at all - the payload was captured at fill time.
+  // Only the live path needs a live page, and it says so if the page is gone.
+  const page = fill.page;
+
+  // dry-run: capture the payload the browser would have sent and post it to the
+  // local sink, rather than pressing a real employer's submit control.
+  if (SUBMIT_MODE !== 'live') {
+    const payload = capturePayload(fill_id);
+    if (!payload) {
+      return { submitted: false, url, error: 'could not read the form payload from the filled page' };
+    }
+    let sink;
+    try {
+      const res = await fetch(CAPTURE_SINK, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      sink = await res.json();
+    } catch (err) {
+      return { submitted: false, url, error: `capture sink unreachable: ${err.message.slice(0, 120)}` };
+    }
+    await dropFill(fill_id);
+    return {
+      submitted: true,
+      mode: 'dry-run',
+      url,
+      would_have_submitted_to: payload.destination,
+      method: payload.method,
+      fields_sent: payload.fields.length,
+      files_sent: payload.files.map((f) => f.filename).filter(Boolean),
+      captured_reference: sink?.reference ?? null,
+      note:
+        'DRY RUN. The form was filled for real and the real payload was built, but it ' +
+        `was captured locally instead of being sent to ${payload.destination}. No employer ` +
+        'received an application. This is finished - do not call any further tools.',
+    };
+  }
 
   // Re-check the wall at submit time: a page can change between fill and approval.
+  if (!page) {
+    return {
+      submitted: false, url,
+      error: 'the browser page for this fill was released. Re-run fill_form to submit live.',
+    };
+  }
+
   const live = await page.evaluate(`(() => ({
     captcha: Boolean(document.querySelector('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], .g-recaptcha, [data-sitekey], iframe[src*="turnstile"]')),
     text: (document.body.innerText || '').slice(0, 3000),

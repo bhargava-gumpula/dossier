@@ -73,6 +73,34 @@ const server = createServer((req, res) => {
       applications: body.trim() ? body.trim().split('\n').map((l) => JSON.parse(l)) : [],
     }, null, 2));
   }
+  // Dry-run sink. Records the payload AND where it was really headed, so the log
+  // makes the difference between "captured" and "sent" impossible to miss.
+  if (req.method === 'POST' && req.url.startsWith('/capture')) {
+    let raw = '';
+    req.on('data', (c) => { raw += c; if (raw.length > 12e6) req.destroy(); });
+    req.on('end', () => {
+      let payload = {};
+      try { payload = JSON.parse(raw); } catch {}
+      const record = {
+        receivedAt: new Date().toISOString(),
+        mode: 'dry-run',
+        intendedDestination: payload.destination ?? '(unknown)',
+        method: payload.method ?? 'POST',
+        fields: Object.fromEntries((payload.fields ?? []).map((f) => [f.name, f.value])),
+        files: payload.files ?? [],
+      };
+      appendFileSync(LOG, JSON.stringify(record) + '\n');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        captured: true,
+        wouldHaveGoneTo: record.intendedDestination,
+        fieldCount: Object.keys(record.fields).length,
+        reference: `DRY-${Date.now().toString(36).toUpperCase()}`,
+      }));
+    });
+    return;
+  }
+
   if (req.method === 'POST' && req.url.startsWith('/apply')) {
     let raw = '';
     req.on('data', (c) => { raw += c; if (raw.length > 12e6) req.destroy(); });

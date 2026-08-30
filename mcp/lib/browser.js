@@ -208,14 +208,20 @@ export async function inspectForm(url, { screenshot = true } = {}) {
 // that might differ. Sessions expire so an abandoned approval cannot leak a
 // browser context forever.
 
-const FILL_TTL_MS = 30 * 60 * 1000;
+// The captured payload is cheap to keep, and an approval can sit for hours.
+const FILL_TTL_MS = 12 * 60 * 60 * 1000;
 const fills = new Map();
 
 function sweepFills() {
   const now = Date.now();
   for (const [id, f] of fills) {
-    if (now - f.createdAt > FILL_TTL_MS) {
+    // Release the browser context early - the payload is what submit needs.
+    if (f.ctx && now - f.createdAt > 5 * 60 * 1000) {
       f.ctx.close().catch(() => {});
+      f.ctx = null; f.page = null;
+    }
+    if (now - f.createdAt > FILL_TTL_MS) {
+      f.ctx?.close().catch(() => {});
       fills.delete(id);
     }
   }
@@ -346,25 +352,88 @@ export async function fillForm(url, { answers = {}, resumePath = null } = {}) {
   if (info.captcha) wall = 'captcha';
   else if (info.accountWall) wall = 'account-required';
 
+  // Readiness is decided here, not re-derived by the model. Without this the
+  // agent re-runs inspect_form after filling just to check its own work, which
+  // is a loop that costs a full round trip and proves nothing new.
+  const missingRequired = skipped.filter((x) => x.required);
+  const blocking = [];
+  if (wall) blocking.push({ kind: wall, detail: 'blocks automated submission' });
+  for (const m of missingRequired) {
+    blocking.push({ kind: 'missing-required', detail: m.label || m.name || '(unlabelled field)' });
+  }
+
+  // Read the payload NOW, while the page is certainly alive, and keep the data
+  // rather than the browser. Approval may arrive long after this returns.
+  const payload = await readFormPayload(page, url, resumePath);
+
   const fillId = `fill_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  fills.set(fillId, { ctx, page, url, createdAt: Date.now(), applied });
+  fills.set(fillId, { url, createdAt: Date.now(), applied, resumePath, payload, ctx, page });
 
   return {
     fillId,
     url,
     filled: true,
     fieldsFilled: applied.length,
-    requiredMissing: skipped.filter((s) => s.required).length,
+    requiredMissing: missingRequired.length,
     applied,
     skipped,
     wall,
-    canSubmit: wall === null,
+    ready_to_submit: blocking.length === 0,
+    blocking,
+    verified: true,
     screenshotBase64: shot.toString('base64'),
-    note: wall
-      ? `Form is filled but ${wall === 'captcha' ? 'a CAPTCHA' : 'an account wall'} blocks ` +
-        'automated submission. Hand the filled form to the human for the final click.'
-      : 'Form is filled and ready. Nothing has been submitted.',
+    note: blocking.length === 0
+      ? 'Form is filled and verified complete. Nothing has been submitted. This report ' +
+        'IS the verification - do not inspect the form again. Call submit_form once.'
+      : wall
+        ? `Form is filled but ${wall === 'captcha' ? 'a CAPTCHA' : 'an account wall'} blocks ` +
+          'automated submission. Do not call submit_form. Hand the filled form to the human.'
+        : `Form is filled but ${missingRequired.length} required field(s) still have no answer. ` +
+          'Do not call submit_form yet - ask the human for the missing values.',
   };
+}
+
+// Read what the browser would actually send: the form's target, its method, and
+// every field value as it currently stands. This is the same data a real submit
+// would carry, which is why capturing it is faithful rather than a description.
+async function readFormPayload(page, url, resumePath) {
+  const form = await page.evaluate(`(() => {
+    const el = document.querySelector('form');
+    if (!el) return null;
+    const fields = [];
+    const files = [];
+    for (const c of el.querySelectorAll('input, select, textarea')) {
+      const type = (c.type || '').toLowerCase();
+      if (!c.name || type === 'submit' || type === 'button') continue;
+      if (type === 'file') {
+        files.push({ name: c.name, filename: c.files?.[0]?.name ?? null });
+        continue;
+      }
+      if ((type === 'checkbox' || type === 'radio') && !c.checked) continue;
+      fields.push({ name: c.name, value: c.value ?? '' });
+    }
+    return {
+      action: el.getAttribute('action') || location.href,
+      method: (el.getAttribute('method') || 'POST').toUpperCase(),
+      fields,
+      files,
+    };
+  })()`);
+
+  if (!form) return null;
+  return {
+    ...form,
+    // Resolve a relative action against the page, so the real destination is exact.
+    destination: new URL(form.action, url).toString(),
+    pageUrl: url,
+    resumePath: resumePath ?? null,
+  };
+}
+
+// The payload is stored at fill time, so this never touches the browser and
+// cannot fail because a page went away while a human was deciding.
+export function capturePayload(fillId) {
+  return fills.get(fillId)?.payload ?? null;
 }
 
 export function getFill(fillId) {
