@@ -1,0 +1,168 @@
+/* The 21st.dev hero, rebuilt for this codebase.
+ *
+ * The original is Tailwind + shadcn + TypeScript. This project is none of those,
+ * and adding Tailwind here would not have been a local change: its preflight is
+ * a global reset, so it would have restyled the dashboard too. Every class below
+ * is prefixed `hx-` so this file cannot reach anything outside the hero. */
+
+@keyframes hx-fade-in {
+  0%   { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes hx-fade-up {
+  0%   { opacity: 0; transform: translateY(40px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* The accent is centred with translateX(-50%), and `transform` is one property:
+ * a keyframe that animates translateY replaces the whole thing and throws the
+ * centring away, which pushed the ellipse a full half-width off to the right.
+ * Its rise carries the X translation along. */
+@keyframes hx-accent-rise {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(40px); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.hx-hero {
+  position: relative;
+  isolation: isolate;             /* keeps the layers below out of the page's stacking order */
+  width: 100%;
+  margin: 0 auto;
+  padding: 10rem 1.5rem 0;
+  text-align: center;
+  min-height: calc(100vh - 40px);
+  overflow: hidden;
+  background: var(--hx-sheet);
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+@media (min-width: 768px) { .hx-hero { padding-left: 2rem; padding-right: 2rem; } }
+
+/* Ruled grid, faded out with a radial mask so it never reaches the edges.
+ *
+ * The original sets -z-10 on this. A negative z-index child paints behind its
+ * parent's own background, which would have hidden it entirely under the
+ * section gradient - so the layers are ordered explicitly here instead. */
+.hx-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  height: 600px;
+  width: 100%;
+  opacity: 0.8;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right,  var(--hx-rule) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hx-rule) 1px, transparent 1px);
+  background-size: 6rem 5rem;
+  -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, #000 70%, transparent 110%);
+          mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, #000 70%, transparent 110%);
+}
+
+/* The wide ellipse that lifts the horizon at the foot of the section. */
+.hx-accent {
+  position: absolute;
+  left: 50%;
+  top: calc(100% - 90px);
+  height: 500px;
+  width: 700px;
+  z-index: 0;
+  transform: translateX(-50%);
+  border-radius: 100%;
+  pointer-events: none;
+  background: var(--hx-accent);
+  animation: hx-accent-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (min-width: 768px)  { .hx-accent { width: 1100px; } }
+@media (min-width: 1024px) { .hx-accent { top: calc(100% - 150px); height: 750px; width: 140%; } }
+
+.hx-content { position: relative; z-index: 1; }
+
+/* Eyebrow ------------------------------------------------------------------ */
+.hx-eyebrow-link { display: inline-block; text-decoration: none; }
+.hx-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lx-fg-2);
+  background: var(--lx-card);
+  border: 2px solid var(--lx-pill-line);
+  border-radius: 1.5rem;
+}
+.hx-chevron { width: 1rem; height: 1rem; margin-left: 0.5rem; transition: transform 0.3s ease; }
+.hx-eyebrow-link:hover .hx-chevron { transform: translateX(4px); }
+
+/* Title -------------------------------------------------------------------- */
+.hx-title {
+  margin: 0;
+  padding: 1.5rem 0;
+  font-size: clamp(2.75rem, 8vw, 6rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+  background-image: var(--hx-title-ink);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+  animation: hx-fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+}
+
+/* Subtitle ----------------------------------------------------------------- */
+.hx-sub {
+  max-width: 44rem;
+  margin: 0 auto 3rem;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  color: var(--lx-fg-2);
+  animation: hx-fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+@media (min-width: 768px) { .hx-sub { font-size: 1.25rem; } }
+
+/* Calls to action ---------------------------------------------------------- */
+.hx-cta-row {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: -20px;
+  animation: hx-fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
+}
+.hx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.75rem;
+  padding: 0 1.75rem;
+  width: fit-content;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+@media (min-width: 768px) { .hx-btn { min-width: 13rem; } }
+.hx-btn-primary { background: var(--lx-btn-bg); color: var(--lx-btn-fg); }
+.hx-btn-primary:hover { filter: brightness(1.18); }
+.hx-btn-ghost {
+  background: transparent;
+  color: var(--lx-fg);
+  border-color: var(--lx-line-strong);
+}
+.hx-btn-ghost:hover { background: var(--lx-hover); }
+
+/* Anyone who has asked for less movement gets the layout without the motion. */
+@media (prefers-reduced-motion: reduce) {
+  .hx-accent, .hx-title, .hx-sub, .hx-cta-row { animation: none; }
+}

@@ -11,6 +11,7 @@
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { extractText, storeUpload, skimResume } from '../mcp/lib/resume-intake.js';
+import { rankPositions } from './match.js';
 import { resolve, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -93,6 +94,7 @@ async function jobLive(job) {
   let resumePath = null;
   let tailoring = null;
   let submitResult = null;
+  let fillResult = null;
   let turnError = null;
   for (const entry of events) {
     const ev = entry.event ?? entry;
@@ -124,6 +126,24 @@ async function jobLive(job) {
         }
       } catch { /* not the response we're after */ }
     }
+    // fill_form's verdict. A wall is discovered HERE, not at submit time -
+    // submit_form is correctly never called once one is found - so reading only
+    // submit_form left a CAPTCHA-blocked application reporting "ready". It also
+    // carries the handoff: where to finish by hand, and every value already
+    // worked out, so the human re-types nothing.
+    if (payload && typeof payload === 'string' && payload.includes('"ready_to_submit"')) {
+      try {
+        const parsed = JSON.parse(payload);
+        if (typeof parsed.ready_to_submit === 'boolean') {
+          fillResult = {
+            readyToSubmit: parsed.ready_to_submit,
+            wall: parsed.wall ?? null,
+            blocking: parsed.blocking ?? [],
+            handoff: parsed.handoff ?? null,
+          };
+        }
+      } catch { /* not the response we're after */ }
+    }
     if (payload && typeof payload === 'string' && payload.includes('resume_path')) {
       try {
         const parsed = JSON.parse(payload);
@@ -151,6 +171,13 @@ async function jobLive(job) {
     status = 'failed';
     turnError = state.message || 'the agent run failed';
   }
+  // A cancelled turn has exactly the same problem and was not covered: it is
+  // not a failure, but it is just as finished, and it fell through to the same
+  // stale "working". Starting many runs at once is how a queue ends up full of
+  // them, so this is the common case, not the rare one.
+  else if (state.status === 'cancelled') {
+    status = 'cancelled';
+  }
   else if (state.status === 'done') {
     // "submitted" has to come from what submit_form actually reported, not from
     // the human having approved it: an approved submit can still be refused by a
@@ -158,6 +185,11 @@ async function jobLive(job) {
     // this project must not tell. A refusal is surfaced as its wall instead.
     status = submitResult?.submitted === true ? 'submitted'
       : submitResult?.wall ? `blocked: ${submitResult.wall}`
+      // A wall found while filling blocks submission just as hard, and it is
+      // the usual case: the agent is told not to call submit_form at all once
+      // it sees one. Without this the run read "ready", which is the opposite
+      // of the truth - nobody can submit it without doing the CAPTCHA by hand.
+      : fillResult?.wall ? `blocked: ${fillResult.wall}`
       : job.approved ? 'not-submitted'
       : 'ready';
   }
@@ -188,6 +220,7 @@ async function jobLive(job) {
     steps,
     output,
     submitResult,
+    fillResult,
     turnError,
   };
 }
@@ -196,7 +229,23 @@ async function jobLive(job) {
 const api = {
   async 'GET /api/state'() {
     const q = loadQueue();
-    const jobs = await Promise.all(q.jobs.map(async (j) => ({ ...j, live: await jobLive(j) })));
+    const all = await Promise.all(q.jobs.map(async (j) => ({ ...j, live: await jobLive(j) })));
+
+    // A cancelled run is dead: its turn cannot be resumed, so the row could
+    // never change again. It is dropped rather than parked in the rail for
+    // ever. Everything else stays - including failures, which the human needs
+    // to see - and it is pruned from the queue too, so the dead sessions are
+    // not re-fetched from TrueForge on every poll.
+    const jobs = all.filter((j) => j.live?.status !== 'cancelled');
+    if (jobs.length !== all.length) {
+      const keep = new Set(jobs.map((j) => j.id));
+      await withQueue(() => {
+        const cur = loadQueue();
+        cur.jobs = cur.jobs.filter((j) => keep.has(j.id) || !all.some((a) => a.id === j.id));
+        saveQueue(cur);
+      });
+    }
+
     const profile = existsSync(PROFILE) ? JSON.parse(readFileSync(PROFILE, 'utf8')) : null;
     if (profile) delete profile._comment;
     return { jobs, profile };
@@ -207,19 +256,37 @@ const api = {
   async 'POST /api/positions'(body) {
     const { company, role } = body;
     if (!company) throw new Error('company required');
-    const r = await mcpCall(JOBS_MCP, 'find_jobs', { company, role, limit: 40 });
+
+    // The whole board, deliberately unfiltered. Ranking against a résumé needs
+    // every posting: the board arrives in its own order, so filtering or
+    // truncating first hands the ranker an arbitrary slice - Anthropic's first
+    // 200 of 571 are alphabetical and contain one "Software Engineer".
+    let r = await mcpCall(JOBS_MCP, 'find_jobs', { company, limit: 1000 });
+
+    // No machine-readable board. The search fallback has nothing to look for
+    // without the role, so that one call does need it.
+    if (!r.found && role) {
+      r = await mcpCall(JOBS_MCP, 'find_jobs', { company, role, limit: 40 });
+    }
+
+    const profile = existsSync(PROFILE) ? JSON.parse(readFileSync(PROFILE, 'utf8')) : null;
+    const all = (r.jobs ?? []).map((j, i) => ({
+      key: j.id ?? `p${i}`,
+      title: j.title ?? j.url,
+      location: j.location ?? null,
+      url: j.applyUrl ?? j.url,
+    }));
+    const { ranked, bestFits, matched } = rankPositions(all, profile, role);
+
     return {
       company,
       found: r.found,
       source: r.source ?? null,
       careersUrl: r.careers_url ?? null,
       note: r.note ?? r.reason ?? null,
-      positions: (r.jobs ?? []).map((j, i) => ({
-        key: j.id ?? `p${i}`,
-        title: j.title ?? j.url,
-        location: j.location ?? null,
-        url: j.applyUrl ?? j.url,
-      })),
+      matchedAgainstResume: matched,
+      bestFits,
+      positions: ranked,
     };
   },
 
