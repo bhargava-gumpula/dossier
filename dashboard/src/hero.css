@@ -32,7 +32,7 @@
   text-align: center;
   min-height: calc(100vh - 40px);
   overflow: hidden;
-  background: linear-gradient(to bottom, #fff, #ffffff 50%, #e8e8e8 88%);
+  background: var(--hx-sheet);
   border-bottom-left-radius: 0.75rem;
   border-bottom-right-radius: 0.75rem;
 }
@@ -52,8 +52,8 @@
   opacity: 0.8;
   pointer-events: none;
   background-image:
-    linear-gradient(to right,  #f0f0f0 1px, transparent 1px),
-    linear-gradient(to bottom, #f0f0f0 1px, transparent 1px);
+    linear-gradient(to right,  var(--hx-rule) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hx-rule) 1px, transparent 1px);
   background-size: 6rem 5rem;
   -webkit-mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, #000 70%, transparent 110%);
           mask-image: radial-gradient(ellipse 80% 50% at 50% 0%, #000 70%, transparent 110%);
@@ -70,7 +70,7 @@
   transform: translateX(-50%);
   border-radius: 100%;
   pointer-events: none;
-  background: radial-gradient(closest-side, #fff 82%, #000000);
+  background: var(--hx-accent);
   animation: hx-accent-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @media (min-width: 768px)  { .hx-accent { width: 1100px; } }
@@ -90,9 +90,9 @@
   font-size: 0.8125rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--fg-2, #6e6e73);
-  background: linear-gradient(to top right, rgba(212, 212, 216, 0.05), rgba(156, 163, 175, 0.05), transparent);
-  border: 2px solid rgba(209, 213, 219, 0.2);
+  color: var(--lx-fg-2);
+  background: var(--lx-card);
+  border: 2px solid var(--lx-pill-line);
   border-radius: 1.5rem;
 }
 .hx-chevron { width: 1rem; height: 1rem; margin-left: 0.5rem; transition: transform 0.3s ease; }
@@ -107,7 +107,7 @@
   line-height: 1;
   letter-spacing: -0.045em;
   text-wrap: balance;
-  background-image: linear-gradient(to bottom right, #000 30%, rgba(0, 0, 0, 0.4));
+  background-image: var(--hx-title-ink);
   -webkit-background-clip: text;
           background-clip: text;
   color: transparent;
@@ -122,7 +122,7 @@
   line-height: 1.5;
   letter-spacing: -0.01em;
   text-wrap: balance;
-  color: var(--fg-2, #6e6e73);
+  color: var(--lx-fg-2);
   animation: hx-fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
 }
 @media (min-width: 768px) { .hx-sub { font-size: 1.25rem; } }
@@ -153,14 +153,14 @@
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 @media (min-width: 768px) { .hx-btn { min-width: 13rem; } }
-.hx-btn-primary { background: var(--ink, #1d1d1f); color: #fff; }
-.hx-btn-primary:hover { background: #000; }
+.hx-btn-primary { background: var(--lx-btn-bg); color: var(--lx-btn-fg); }
+.hx-btn-primary:hover { filter: brightness(1.18); }
 .hx-btn-ghost {
   background: transparent;
-  color: var(--fg, #1d1d1f);
-  border-color: rgba(0, 0, 0, 0.14);
+  color: var(--lx-fg);
+  border-color: var(--lx-line-strong);
 }
-.hx-btn-ghost:hover { background: rgba(0, 0, 0, 0.04); }
+.hx-btn-ghost:hover { background: var(--lx-hover); }
 
 /* Anyone who has asked for less movement gets the layout without the motion. */
 @media (prefers-reduced-motion: reduce) {

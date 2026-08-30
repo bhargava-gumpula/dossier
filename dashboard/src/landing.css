@@ -1,133 +1,355 @@
-/* Apple front-page: sticky blurred nav, enormous silence between chapters,
-   one accent colour, and reveals that rise rather than bounce. */
+/* Homepage theme.
+ *
+ * The whole landing page in the language of the 21st.dev hero: gradient sheets
+ * rather than flat fills, ruled grids faded out with radial masks, gradient-clipped
+ * headings, hairline-bordered cards, and rounded-md buttons instead of pills.
+ *
+ * Every rule is scoped under `.landing`. The typography classes (.t-*), .btn-pill,
+ * .reveal and .wrap all live in theme.css, which the dashboard also loads - so they
+ * are overridden here rather than edited there. Nothing in this file can reach the
+ * dashboard, which is meant to stay exactly as it is.
+ */
 
-.nav {
+.landing {
+  /* Light */
+  --lx-sheet:       linear-gradient(to bottom, #fff, #ffffff 50%, #e8e8e8 88%);
+  --lx-bg:          #ffffff;
+  --lx-bg-2:        #fafafa;
+  --lx-fg:          #0a0a0a;
+  --lx-fg-2:        #52525b;
+  --lx-fg-3:        #71717a;
+  --lx-line:        rgba(0, 0, 0, 0.07);
+  --lx-line-strong: rgba(0, 0, 0, 0.14);
+  --lx-pill-line:   rgba(209, 213, 219, 0.55);
+  --lx-card:        linear-gradient(to top right, rgba(212, 212, 216, 0.30), rgba(156, 163, 175, 0.14), transparent);
+  --lx-hover:       rgba(0, 0, 0, 0.04);
+  --lx-rule:        #f0f0f0;
+  --lx-btn-bg:      #0a0a0a;
+  --lx-btn-fg:      #ffffff;
+  --lx-title-ink:   linear-gradient(to bottom right, #000 30%, rgba(0, 0, 0, 0.4));
+  --lx-accent:      radial-gradient(closest-side, #fff 82%, #000000);
+  --lx-panel:       #0a0a0a;
+  --lx-panel-fg:    #fafafa;
+
+  /* hero.css reads these two under its own names */
+  --hx-sheet:       var(--lx-sheet);
+  --hx-rule:        var(--lx-rule);
+  --hx-accent:      var(--lx-accent);
+  --hx-title-ink:   var(--lx-title-ink);
+
+  background: var(--lx-bg);
+  color: var(--lx-fg);
+  letter-spacing: -0.02em;
+}
+
+@media (prefers-color-scheme: dark) {
+  .landing {
+    --lx-sheet:       linear-gradient(to bottom, #000, rgba(0,0,0,0) 30%, #898e8e 78%, #ffffff 99%);
+    --lx-bg:          #000000;
+    --lx-bg-2:        #0a0a0a;
+    --lx-fg:          #fafafa;
+    --lx-fg-2:        #a1a1aa;
+    --lx-fg-3:        #8b8b93;
+    --lx-line:        rgba(255, 255, 255, 0.08);
+    --lx-line-strong: rgba(255, 255, 255, 0.16);
+    --lx-pill-line:   rgba(255, 255, 255, 0.08);
+    --lx-card:        linear-gradient(to top right, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02), transparent);
+    --lx-hover:       rgba(255, 255, 255, 0.06);
+    --lx-rule:        #262626;
+    --lx-btn-bg:      #fafafa;
+    --lx-btn-fg:      #0a0a0a;
+    --lx-title-ink:   linear-gradient(to bottom right, #fff 30%, rgba(255, 255, 255, 0.4));
+    --lx-accent:      radial-gradient(closest-side, #000 82%, #ffffff);
+    --lx-panel:       #0c0c0d;
+    --lx-panel-fg:    #fafafa;
+  }
+}
+
+/* Typography ---------------------------------------------------------------
+   Tighter tracking and balanced wrapping throughout, and headings picked out in
+   the same clipped gradient the hero title uses so the page reads as one piece. */
+.landing .t-hero,
+.landing .t-section {
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  text-wrap: balance;
+  font-weight: 600;
+  background-image: var(--lx-title-ink);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+.landing .t-section { font-size: clamp(2rem, 4.4vw, 3.5rem); }
+.landing .t-sub,
+.landing .t-body { color: var(--lx-fg-2); letter-spacing: -0.014em; text-wrap: balance; }
+.landing .t-caption { color: var(--lx-fg-3); letter-spacing: -0.01em; }
+.landing .t-eyebrow {
+  color: var(--lx-fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Buttons: shadcn's shape - rounded-md, solid, no pill. --------------------- */
+.landing .btn-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 2.75rem; padding: 0 1.75rem;
+  border-radius: 0.5rem;
+  background: var(--lx-btn-bg); color: var(--lx-btn-fg);
+  font-size: 1rem; font-weight: 500; letter-spacing: -0.02em;
+  border: 1px solid transparent;
+  transition: filter .18s ease, background .18s ease;
+}
+.landing .btn-pill:hover { filter: brightness(1.18); background: var(--lx-btn-bg); text-decoration: none; }
+.landing .btn-pill.ghost {
+  background: transparent; color: var(--lx-fg);
+  border-color: var(--lx-line-strong);
+}
+.landing .btn-pill.ghost:hover { background: var(--lx-hover); filter: none; }
+
+/* Nav ---------------------------------------------------------------------- */
+.landing .nav {
   position: sticky; top: 0; z-index: 50; height: var(--nav-h);
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  background: color-mix(in srgb, var(--lx-bg) 72%, transparent);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  border-bottom: 1px solid var(--lx-line);
 }
-.nav-inner {
-  max-width: 1024px; margin: 0 auto; padding: 0 22px; height: 100%;
+.landing .nav-inner {
+  max-width: 1120px; margin: 0 auto; padding: 0 22px; height: 100%;
   display: flex; align-items: center; justify-content: space-between;
 }
-.nav-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-.nav-links { display: flex; align-items: center; gap: 26px; }
-.nav-links a { font-size: 12.5px; color: var(--fg-2); letter-spacing: -0.005em; }
-.nav-links a:hover { color: var(--fg); text-decoration: none; }
-.nav-cta {
-  font-size: 12.5px; color: #fff; background: var(--blue);
-  padding: 5px 13px; border-radius: 980px; font-weight: 450;
+.landing .nav-brand { font-size: 15px; font-weight: 600; letter-spacing: -0.03em; color: var(--lx-fg); }
+.landing .nav-links { display: flex; align-items: center; gap: 26px; }
+.landing .nav-links a { font-size: 13px; color: var(--lx-fg-2); letter-spacing: -0.015em; }
+.landing .nav-links a:hover { color: var(--lx-fg); text-decoration: none; }
+.landing .nav-cta {
+  font-size: 13px; font-weight: 500; letter-spacing: -0.02em;
+  color: var(--lx-btn-fg); background: var(--lx-btn-bg);
+  padding: 7px 15px; border-radius: 0.5rem;
+  transition: filter .18s ease;
 }
-.nav-cta:hover { background: var(--blue-press); }
+.landing .nav-cta:hover { filter: brightness(1.18); }
 
-.hero { padding: 88px 0 0; text-align: center; overflow: hidden; }
-.hero .t-eyebrow { margin-bottom: 12px; }
-.hero-sub { max-width: 620px; margin: 20px auto 0; }
-.hero-cta { display: flex; gap: 14px; justify-content: center; margin-top: 30px; }
-
-/* Product shot: a real device-ish frame, floated on a soft gradient. */
-.hero-art { margin-top: 66px; padding: 0 22px 90px; }
-.chrome {
-  max-width: 1000px; margin: 0 auto; border-radius: 20px; overflow: hidden;
-  background: var(--surface-3); border: 1px solid var(--line);
-  box-shadow: 0 40px 90px -30px rgba(0,0,0,.32), 0 8px 24px -12px rgba(0,0,0,.18);
+/* Product shot ------------------------------------------------------------- */
+.landing .hero-shot {
+  position: relative;
+  padding: 0 0 8px;
+  background: var(--lx-bg);
 }
-.chrome-bar {
+.landing .hero-shot .hero-art { margin-top: 0; padding: 96px 22px 110px; }
+.landing .chrome {
+  max-width: 1000px; margin: 0 auto; border-radius: 0.75rem; overflow: hidden;
+  background: var(--lx-bg-2); border: 1px solid var(--lx-line);
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .28), 0 8px 24px -12px rgba(0, 0, 0, .14);
+}
+.landing .chrome-bar {
   height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 14px;
-  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
-  border-bottom: 1px solid var(--line);
+  background: var(--lx-bg-2);
+  border-bottom: 1px solid var(--lx-line);
 }
-.chrome-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
-.chrome-body { display: grid; grid-template-columns: 260px 1fr; min-height: 300px; text-align: left; }
-
-.mock-rail { border-right: 1px solid var(--line); padding: 12px; background: var(--surface-2); }
-.mock-row {
-  padding: 11px 12px; border-radius: 10px; font-size: 13px; font-weight: 500;
-  display: flex; flex-direction: column; gap: 7px;
-}
-.mock-row.on { background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-.tag {
-  font-size: 10px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase;
-  padding: 3px 8px; border-radius: 980px; font-style: normal; align-self: flex-start;
-}
-.tag.violet { background: color-mix(in srgb, var(--violet) 15%, transparent); color: var(--violet); }
-.tag.amber  { background: color-mix(in srgb, var(--amber) 16%, transparent);  color: var(--amber); }
-.tag.green  { background: color-mix(in srgb, var(--green) 15%, transparent);  color: var(--green); }
-
-.mock-pane { padding: 20px 22px; }
-.mock-gate {
-  border: 1px solid color-mix(in srgb, var(--violet) 40%, var(--line));
-  border-radius: 14px; padding: 16px 18px;
-  background: color-mix(in srgb, var(--violet) 6%, transparent);
-}
-.mock-gate-h { font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--violet); }
-.mock-gate-b { font-size: 14px; margin-top: 8px; color: var(--fg-2); }
-.mock-gate-b strong { color: var(--fg); font-weight: 600; }
-.mock-actions { display: flex; gap: 8px; margin-top: 14px; }
-.mock-btn { font-size: 12.5px; padding: 6px 14px; border-radius: 980px; border: 1px solid var(--line); color: var(--fg-2); }
-.mock-btn.blue { background: var(--blue); color: #fff; border-color: var(--blue); }
-.mock-steps { margin-top: 18px; display: flex; flex-direction: column; gap: 9px; }
-.mock-step { font-size: 12.5px; color: var(--fg-3); display: flex; align-items: center; gap: 9px; }
-.mock-step i { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
-
-/* Chapters, separated by a lot of nothing — the most Apple thing there is. */
-.band { padding: 118px 0; text-align: center; }
-.band.alt { background: var(--surface-2); }
-.band.dark { background: var(--ink); color: #f5f5f7; }
-.band.dark .t-body, .band.dark .t-sub { color: #a1a1a6; }
-.band-sub { max-width: 660px; margin: 22px auto 0; }
-
-.routes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; margin-top: 56px; text-align: left; }
-.route { background: var(--surface-2); border-radius: var(--radius); padding: 24px 22px; }
-.band.alt .route { background: var(--surface); }
-.route h3 { font-size: 19px; font-weight: 600; letter-spacing: -0.015em; }
-.route p { font-size: 14.5px; color: var(--fg-2); margin-top: 8px; line-height: 1.5; }
-
-.stat-row { display: flex; gap: 60px; justify-content: center; margin-top: 60px; flex-wrap: wrap; }
-.stat-row div { display: flex; flex-direction: column; gap: 6px; }
-.stat-row b { font-size: 56px; font-weight: 650; letter-spacing: -0.03em; line-height: 1; }
-.stat-row span { font-size: 14px; color: #a1a1a6; }
-
-.walls { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; margin-top: 56px; text-align: left; }
-.wall { border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 22px; }
-.wall h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-.wall p { font-size: 14.5px; color: var(--fg-2); margin-top: 7px; }
-
-.prompt-demo {
-  max-width: 640px; margin: 48px auto 0; text-align: left;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-  padding: 16px 20px; font-size: 16px; color: var(--fg-2);
-  display: flex; gap: 12px; align-items: center;
-  box-shadow: 0 2px 10px rgba(0,0,0,.05);
-}
-.prompt-caret { color: var(--blue); font-weight: 600; }
-
-.closer { padding: 130px 0; text-align: center; }
-.foot { padding: 40px 0 60px; border-top: 1px solid var(--line); text-align: center; }
-
-@media (max-width: 760px) {
-  .chrome-body { grid-template-columns: 1fr; }
-  .mock-rail { border-right: 0; border-bottom: 1px solid var(--line); }
-  .nav-links a { display: none; }
-  .band { padding: 84px 0; }
-  .stat-row { gap: 34px; }
+.landing .chrome-bar i {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--lx-line-strong); display: block;
 }
 
-/* The product shot used to live inside the hero. The new hero owns a full
-   viewport of its own, so the shot is its own section now and brings its own
-   spacing rather than inheriting the hero's. */
-.hero-shot { padding: 0 0 8px; }
-.hero-shot .hero-art { margin-top: 0; padding: 72px 22px 90px; }
+/* Product shot internals. Restyled to the new language - hairline borders,
+   rounded-md corners, tokenised colours - but structurally as they were. */
+.landing .chrome-body {
+  display: grid; grid-template-columns: 260px 1fr;
+  min-height: 300px; text-align: left;
+  background: var(--lx-bg);
+}
+.landing .mock-rail {
+  border-right: 1px solid var(--lx-line); padding: 12px; background: var(--lx-bg-2);
+}
+.landing .mock-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 12px; border-radius: 0.5rem;
+  font-size: 13px; letter-spacing: -0.015em; color: var(--lx-fg-2);
+}
+.landing .mock-row.on {
+  background: var(--lx-bg); color: var(--lx-fg);
+  border: 1px solid var(--lx-line);
+}
+.landing .mock-row .tag {
+  font-size: 10.5px; font-style: normal; font-weight: 500;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--lx-line-strong); color: var(--lx-fg-3);
+}
+.landing .mock-pane { padding: 20px 22px; }
+.landing .mock-gate {
+  border: 1px solid var(--lx-line); border-radius: 0.75rem;
+  padding: 16px 18px; background: var(--lx-card);
+}
+.landing .mock-gate-h {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--lx-fg-3);
+}
+.landing .mock-gate-b { font-size: 14px; margin-top: 8px; color: var(--lx-fg-2); letter-spacing: -0.012em; }
+.landing .mock-gate-b strong { color: var(--lx-fg); font-weight: 600; }
+.landing .mock-actions { display: flex; gap: 8px; margin-top: 14px; }
+.landing .mock-btn {
+  font-size: 12.5px; padding: 7px 14px; border-radius: 0.4rem;
+  border: 1px solid var(--lx-line-strong); color: var(--lx-fg-2);
+  letter-spacing: -0.015em;
+}
+.landing .mock-btn.blue {
+  background: var(--lx-btn-bg); color: var(--lx-btn-fg); border-color: transparent;
+}
+.landing .mock-steps { margin-top: 18px; display: flex; flex-direction: column; gap: 9px; }
+.landing .mock-step {
+  font-size: 12.5px; color: var(--lx-fg-3);
+  display: flex; align-items: center; gap: 9px; letter-spacing: -0.01em;
+}
+.landing .mock-step i {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: currentColor; display: block; opacity: .75;
+}
+
+/* Bands -------------------------------------------------------------------- */
+.landing .band {
+  position: relative;
+  padding: 132px 0;
+  text-align: center;
+  background: var(--lx-bg);
+  overflow: hidden;
+}
+.landing .band > .wrap { position: relative; z-index: 1; }
+
+/* The ruled grid, reused from the hero and faded from the top of each band. */
+.landing .band::before {
+  content: '';
+  position: absolute; inset: 0; height: 420px;
+  opacity: 0.75; pointer-events: none;
+  background-image:
+    linear-gradient(to right,  var(--lx-rule) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--lx-rule) 1px, transparent 1px);
+  background-size: 6rem 5rem;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 60%, transparent 100%);
+          mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 60%, transparent 100%);
+}
+.landing .band.alt { background: var(--lx-bg-2); }
+
+/* The gate section stays the one dark panel, and carries the accent ellipse. */
+.landing .band.dark {
+  background: var(--lx-panel);
+  color: var(--lx-panel-fg);
+  border-radius: 0.75rem;
+  margin: 0 12px;
+}
+.landing .band.dark::before {
+  background-image:
+    linear-gradient(to right,  rgba(255,255,255,.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.06) 1px, transparent 1px);
+}
+.landing .band.dark::after {
+  content: '';
+  position: absolute; left: 50%; top: calc(100% - 120px);
+  width: 130%; height: 460px;
+  transform: translateX(-50%);
+  border-radius: 100%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, var(--lx-panel) 78%, rgba(255, 255, 255, 0.5));
+}
+.landing .band.dark .t-section {
+  background-image: linear-gradient(to bottom right, #fff 30%, rgba(255, 255, 255, 0.4));
+}
+.landing .band.dark .t-body,
+.landing .band.dark .t-sub { color: #a1a1aa; }
+.landing .band-sub { max-width: 680px; margin: 22px auto 0; }
+
+/* Cards -------------------------------------------------------------------- */
+.landing .routes {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px; margin-top: 60px; text-align: left;
+}
+.landing .route,
+.landing .wall {
+  background: var(--lx-card);
+  border: 1px solid var(--lx-line);
+  border-radius: 0.75rem;
+  padding: 24px 22px;
+  transition: border-color .2s ease, transform .2s ease;
+}
+.landing .route:hover,
+.landing .wall:hover { border-color: var(--lx-line-strong); transform: translateY(-2px); }
+.landing .band.alt .route { background: var(--lx-card); }
+.landing .route h3,
+.landing .wall h3 {
+  font-size: 17px; font-weight: 600; letter-spacing: -0.03em; color: var(--lx-fg);
+}
+.landing .route p,
+.landing .wall p {
+  font-size: 14px; color: var(--lx-fg-2); margin-top: 8px;
+  line-height: 1.55; letter-spacing: -0.012em;
+}
+
+.landing .walls {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px; margin-top: 60px; text-align: left;
+}
+
+/* Stats -------------------------------------------------------------------- */
+.landing .stat-row {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 56px; margin-top: 64px;
+}
+.landing .stat-row > div { display: flex; flex-direction: column; gap: 6px; }
+.landing .stat-row b {
+  font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 600; line-height: 1;
+  letter-spacing: -0.05em;
+  background-image: linear-gradient(to bottom right, #fff 30%, rgba(255, 255, 255, 0.35));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.landing .stat-row span {
+  font-size: 13px; color: #a1a1aa; letter-spacing: -0.01em; max-width: 180px;
+}
+
+/* Prompt demo -------------------------------------------------------------- */
+.landing .prompt-demo {
+  max-width: 640px; margin: 56px auto 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 20px; text-align: left;
+  background: var(--lx-card);
+  border: 1px solid var(--lx-line);
+  border-radius: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px; letter-spacing: -0.01em; color: var(--lx-fg);
+}
+.landing .prompt-caret { color: var(--lx-fg-3); font-weight: 600; }
+
+/* Closer and footer -------------------------------------------------------- */
+.landing .closer {
+  position: relative; overflow: hidden;
+  padding: 150px 0 160px; text-align: center;
+  background: var(--lx-sheet);
+}
+.landing .closer > .wrap { position: relative; z-index: 1; }
+.landing .closer .hero-cta { display: flex; gap: 14px; margin-top: 34px; }
+.landing .foot {
+  padding: 44px 0 60px; text-align: center;
+  border-top: 1px solid var(--lx-line);
+  background: var(--lx-bg);
+}
 
 /* Kept for the optional ASCII layer, which the hero takes as a `background`
    slot. Unmounted at the moment; the rule costs nothing and means switching it
    back on is a one-line change rather than a re-write. */
-.ascii-bg {
+.landing .ascii-bg {
   position: absolute; top: 0; left: 0; right: 0;
   height: 600px; width: 100%;
   display: block; pointer-events: none;
   z-index: 0;
 }
-@media (max-width: 700px) { .ascii-bg { height: 460px; } }
+@media (max-width: 700px) { .landing .ascii-bg { height: 460px; } }
+
+@media (max-width: 700px) {
+  .landing .chrome-body { grid-template-columns: 1fr; }
+  .landing .mock-rail { border-right: 0; border-bottom: 1px solid var(--lx-line); }
+  .landing .band { padding: 92px 0; }
+  .landing .stat-row { gap: 34px; }
+  .landing .nav-links a { display: none; }
+}
