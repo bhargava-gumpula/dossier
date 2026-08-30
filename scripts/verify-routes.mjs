@@ -44,7 +44,14 @@ const RESOLVE_CASES = [
   { company: 'Anthropic', expectSource: 'greenhouse' },
   { company: 'Ramp', expectSource: 'ashby' },
   { company: 'NVIDIA', expectSource: 'workday' },
+  { company: 'Nutanix', expectSource: 'jobvite' },
 ];
+
+// Employers that self-host their careers site and publish no machine-readable
+// board. Direct probing cannot enumerate them, so discovery falls back to web
+// search - which is what makes this general instead of one ATS integration at
+// a time. These must still return a careers pointer when search is unavailable.
+const SELF_HOSTED = ['Shopify', 'Atlassian'];
 
 let failures = 0;
 
@@ -60,6 +67,13 @@ console.log('Company resolution — name it, don\'t link it');
 for (const c of RESOLVE_CASES) {
   const r = await resolveCompany(c.company);
   check(`${c.company} resolves to ${c.expectSource}`, r.found ? r.source : 'NOT FOUND', c.expectSource);
+}
+
+console.log('\nSelf-hosted employers — must fail honestly, with a pointer');
+for (const company of SELF_HOSTED) {
+  const r = await resolveCompany(company);
+  check(`${company} reports no board`, r.found, false);
+  check(`${company} points at a careers site`, Boolean(r.careersUrl), true);
 }
 
 console.log('\nApply-route detection — never assume a platform');

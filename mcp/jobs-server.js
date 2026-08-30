@@ -13,6 +13,7 @@
 import { createServer } from 'node:http';
 import { resolveCompany, greenhouseJobs, ashbyJobs, workdayJobs } from './lib/sources.js';
 import { detectApplyRoute } from './lib/route.js';
+import { searchJobs, scrapeBlocked, isSearchAvailable } from './lib/websearch.js';
 
 const PORT = Number(process.env.JOBS_MCP_PORT ?? 8793);
 const PROTOCOL_VERSION = '2025-06-18';
@@ -35,6 +36,40 @@ const TOOLS = [
         limit: { type: 'integer', description: 'Max results (default 10).' },
       },
       required: ['company'],
+    },
+  },
+  {
+    name: 'search_jobs_on_web',
+    description:
+      'Find job postings by searching the open web. Use this when find_jobs ' +
+      'reports no public job board - most large employers self-host their ' +
+      'careers site and publish no machine-readable listing. Returns candidate ' +
+      "job URLs on the employer's own domain or their applicant system, with " +
+      'third-party aggregators excluded because a listing there is a copy, not ' +
+      'the way the company asks to be applied to.',
+    annotations: { title: 'Search the web for jobs', ...READ_ONLY },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        company: { type: 'string' },
+        role: { type: 'string', description: 'Role text, e.g. "backend engineer".' },
+        limit: { type: 'integer' },
+      },
+      required: ['company'],
+    },
+  },
+  {
+    name: 'fetch_blocked_page',
+    description:
+      'Fetch a page that ordinary requests cannot reach. Some careers sites ' +
+      'refuse both a plain fetch and a real browser with a 403. Use this only ' +
+      'after a normal attempt has failed. This is a paid fetch through a proxy ' +
+      'service, not a CAPTCHA bypass.',
+    annotations: { title: 'Fetch a blocked page', ...READ_ONLY },
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string' } },
+      required: ['url'],
     },
   },
   {
@@ -66,17 +101,64 @@ function scoreTitle(title, role) {
   return hits / words.length;
 }
 
+async function toolSearchJobsOnWeb({ company, role, limit = 8 }) {
+  if (!(await isSearchAvailable())) {
+    return { error: 'web search is not configured. Run scripts/add-search-connector.sh.' };
+  }
+  const r = await searchJobs(company, role, { limit });
+  return {
+    ...r,
+    note: r.jobs.length
+      ? 'These are candidate URLs from the open web. Call detect_apply_route on ' +
+        'the one you choose - searching found the page, it did not tell you how ' +
+        'to apply.'
+      : 'Search returned nothing usable on the employer\'s own domain.',
+  };
+}
+
+async function toolFetchBlockedPage({ url }) {
+  if (!(await isSearchAvailable())) {
+    return { error: 'web search is not configured. Run scripts/add-search-connector.sh.' };
+  }
+  const r = await scrapeBlocked(url);
+  return { ...r, chars: r.markdown.length };
+}
+
 async function toolFindJobs({ company, role, limit = 10 }) {
   const r = await resolveCompany(company);
+
   if (!r.found) {
+    // Direct board APIs are fast, free and exact, but they only cover employers
+    // who publish a machine-readable board. For everyone else, search is how
+    // this generalises - no per-employer integration required.
+    const searchable = await isSearchAvailable();
+    if (searchable) {
+      const web = await searchJobs(company, role, { limit });
+      if (web.jobs.length) {
+        return {
+          found: true,
+          company,
+          source: 'web-search',
+          careers_url: r.careersUrl ?? null,
+          total_matching: web.jobs.length,
+          jobs: web.jobs,
+          note:
+            'This employer publishes no machine-readable job board, so these came ' +
+            'from a web search of their own site. Call detect_apply_route on the ' +
+            'URL you pick before doing anything else.',
+        };
+      }
+    }
     return {
       found: false,
       company,
       tried_slugs: r.triedSlugs,
-      note:
-        'No public job board found for this company on Greenhouse, Ashby or ' +
-        'Workday. It may use a bespoke careers site - supply a job URL directly ' +
-        'and use detect_apply_route on it.',
+      careers_url: r.careersUrl ?? null,
+      reason: r.reason,
+      note: searchable
+        ? r.whatToDo ?? 'No board and no usable search results. Give me a job URL.'
+        : 'No public job board found, and web search is not configured. ' +
+          'Give me a job URL directly, or run scripts/add-search-connector.sh.',
     };
   }
 
@@ -110,7 +192,12 @@ async function toolDetectApplyRoute({ apply_url }) {
   return detectApplyRoute(apply_url);
 }
 
-const IMPL = { find_jobs: toolFindJobs, detect_apply_route: toolDetectApplyRoute };
+const IMPL = {
+  find_jobs: toolFindJobs,
+  search_jobs_on_web: toolSearchJobsOnWeb,
+  fetch_blocked_page: toolFetchBlockedPage,
+  detect_apply_route: toolDetectApplyRoute,
+};
 
 // ------------------------------------------------------------- MCP transport
 

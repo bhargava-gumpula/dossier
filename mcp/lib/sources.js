@@ -160,6 +160,76 @@ export async function workdayJobs(slug, { limit = 20, maxJobs = 200 } = {}) {
   }));
 }
 
+// Jobvite publishes no JSON feed, but its board pages carry a stable link shape
+// (/{company}/job/{id}) with the title in the anchor text, so the listing can be
+// read from the HTML without a browser. Nutanix is on Jobvite.
+export async function jobviteJobs(slug) {
+  const url = `https://jobs.jobvite.com/${encodeURIComponent(slug)}`;
+  let html;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 12000);
+    const res = await fetch(url, {
+      redirect: 'follow',
+      headers: { 'user-agent': UA, accept: 'text/html' },
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    html = await res.text();
+  } catch { return null; }
+
+  const re = new RegExp(
+    `<a[^>]+href="(/${slug}/job/([A-Za-z0-9]+))"[^>]*>([\\s\\S]{0,200}?)</a>`, 'gi');
+  const jobs = [];
+  const seen = new Set();
+  for (const m of html.matchAll(re)) {
+    const [, href, id, inner] = m;
+    const title = inner.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!title || seen.has(id)) continue;
+    seen.add(id);
+    jobs.push({
+      source: 'jobvite',
+      board: slug,
+      id,
+      title,
+      location: null,
+      applyUrl: `https://jobs.jobvite.com${href}`,
+    });
+  }
+  return jobs.length ? jobs : null;
+}
+
+// Last resort when no public board answers: find where the company actually
+// posts jobs, so the answer is "here is their careers site" rather than a dead
+// end. Many large employers self-host (Nutanix, Shopify, Atlassian all do), and
+// those sites cannot be enumerated without per-vendor work - but the rest of the
+// pipeline works fine from a job URL, so pointing the human at the right place
+// is genuinely useful.
+async function findCareersSite(slug) {
+  const candidates = [
+    `https://careers.${slug}.com`,
+    `https://jobs.${slug}.com`,
+    `https://www.${slug}.com/careers`,
+    `https://${slug}.com/careers`,
+  ];
+  const probe = async (url) => {
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 8000);
+      const res = await fetch(url, {
+        redirect: 'follow',
+        headers: { 'user-agent': UA, accept: 'text/html' },
+        signal: ctl.signal,
+      });
+      clearTimeout(timer);
+      return res.ok ? res.url : null;
+    } catch { return null; }
+  };
+  const results = await Promise.all(candidates.map(probe));
+  return results.find(Boolean) ?? null;
+}
+
 // Try every source for a company name. Returns the first board that answers.
 export async function resolveCompany(company) {
   const slugs = slugCandidates(company);
@@ -169,12 +239,30 @@ export async function resolveCompany(company) {
       greenhouseJobs(slug).then((jobs) => (jobs ? { source: 'greenhouse', slug, jobs } : null)),
       ashbyJobs(slug).then((jobs) => (jobs ? { source: 'ashby', slug, jobs } : null)),
       workdayJobs(slug).then((jobs) => (jobs ? { source: 'workday', slug, jobs } : null)),
+      jobviteJobs(slug).then((jobs) => (jobs ? { source: 'jobvite', slug, jobs } : null)),
     );
   }
   const results = (await Promise.all(probes)).filter(Boolean);
-  if (!results.length) return { found: false, company, triedSlugs: slugs };
+
+  if (!results.length) {
+    const careersUrl = await findCareersSite(slugs[0]);
+    return {
+      found: false,
+      company,
+      triedSlugs: slugs,
+      careersUrl,
+      reason: careersUrl
+        ? 'This employer does not publish a machine-readable job board. Their ' +
+          'careers site is self-hosted, so roles cannot be listed automatically.'
+        : 'No public job board and no careers site found at the usual addresses.',
+      whatToDo: careersUrl
+        ? `Open ${careersUrl}, find the role, and give me its URL. Everything after ` +
+          'that - reading the form, filling it and the approval gate - works exactly the same.'
+        : 'Give me the job URL directly and I will handle the rest.',
+    };
+  }
   // Prefer Greenhouse: it is the only source that publishes a form schema.
-  const rank = { greenhouse: 0, ashby: 1, workday: 2 };
+  const rank = { greenhouse: 0, ashby: 1, workday: 2, jobvite: 3 };
   results.sort((a, b) => rank[a.source] - rank[b.source]);
   const best = results[0];
   return { found: true, company, source: best.source, board: best.slug, jobs: best.jobs };
