@@ -105,36 +105,59 @@ function workdaySites(slug) {
   ])];
 }
 
-export async function workdayJobs(slug, { limit = 20 } = {}) {
+// Workday caps a page at 20; role matching over only the first page silently
+// reports real requisitions as absent on large boards (NVIDIA has 2000+).
+async function workdayPage(origin, slug, site, offset, limit) {
+  return getJson(`${origin}/wday/cxs/${slug}/${site}/jobs`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ appliedFacets: {}, limit, offset, searchText: '' }),
+    timeoutMs: 8000,
+  });
+}
+
+export async function workdayJobs(slug, { limit = 20, maxJobs = 200 } = {}) {
+  // Two stages on purpose. Probing every host/site combination while ALSO
+  // paginating each one fires ~360 concurrent requests, most of which time out
+  // and silently return short results. So: find the live board with one cheap
+  // request each, then paginate only the board that answered.
   const attempts = [];
   for (const host of WORKDAY_HOSTS) {
-    for (const site of workdaySites(slug)) {
-      attempts.push({ host, site });
-    }
+    for (const site of workdaySites(slug)) attempts.push({ host, site });
   }
 
-  const probe = async ({ host, site }) => {
+  const found = (await Promise.all(attempts.map(async ({ host, site }) => {
     const origin = `https://${slug}.${host}.myworkdayjobs.com`;
-    const d = await getJson(`${origin}/wday/cxs/${slug}/${site}/jobs`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ appliedFacets: {}, limit, offset: 0, searchText: '' }),
-      timeoutMs: 8000,
-    });
-    if (!d?.jobPostings?.length) return null;
-    return d.jobPostings.map((j) => ({
-      source: 'workday',
-      board: `${slug}/${site}`,
-      id: (j.bulletFields ?? [])[0] ?? j.externalPath,
-      title: j.title,
-      location: j.locationsText ?? null,
-      applyUrl: `${origin}/en-US/${site}${j.externalPath}`,
-      postedOn: j.postedOn ?? null,
-    }));
-  };
+    const d = await workdayPage(origin, slug, site, 0, limit);
+    return d?.jobPostings?.length ? { origin, site, first: d } : null;
+  }))).find(Boolean);
 
-  const results = await Promise.all(attempts.map(probe));
-  return results.find(Boolean) ?? null;
+  if (!found) return null;
+
+  const { origin, site, first } = found;
+  const total = Math.min(first.total ?? first.jobPostings.length, maxJobs);
+  const offsets = [];
+  for (let o = limit; o < total; o += limit) offsets.push(o);
+
+  // Paginate the one live board in small concurrent batches.
+  const postings = [...first.jobPostings];
+  for (let i = 0; i < offsets.length; i += 5) {
+    const batch = await Promise.all(
+      offsets.slice(i, i + 5).map((o) => workdayPage(origin, slug, site, o, limit)),
+    );
+    postings.push(...batch.flatMap((r) => r?.jobPostings ?? []));
+    if (postings.length >= maxJobs) break;
+  }
+
+  return postings.slice(0, maxJobs).map((j) => ({
+    source: 'workday',
+    board: `${slug}/${site}`,
+    id: (j.bulletFields ?? [])[0] ?? j.externalPath,
+    title: j.title,
+    location: j.locationsText ?? null,
+    applyUrl: `${origin}/en-US/${site}${j.externalPath}`,
+    postedOn: j.postedOn ?? null,
+  }));
 }
 
 // Try every source for a company name. Returns the first board that answers.

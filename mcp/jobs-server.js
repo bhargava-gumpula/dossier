@@ -118,7 +118,16 @@ function rpcResult(id, result) { return { jsonrpc: '2.0', id, result }; }
 function rpcError(id, code, message) { return { jsonrpc: '2.0', id, error: { code, message } }; }
 
 async function handleRpc(msg) {
-  const { id, method, params } = msg;
+  // A bare `null` or a JSON scalar is valid JSON but not a JSON-RPC message.
+  // Destructuring it throws inside Promise.all, which surfaces as an unhandled
+  // rejection and can take the process down instead of returning an error.
+  if (msg === null || typeof msg !== 'object' || Array.isArray(msg)) {
+    return rpcError(null, -32600, 'Invalid Request');
+  }
+  const { id = null, method, params } = msg;
+  if (typeof method !== 'string') {
+    return rpcError(id, -32600, 'Invalid Request: missing method');
+  }
 
   if (method === 'initialize') {
     return rpcResult(id, {
@@ -184,7 +193,13 @@ const server = createServer(async (req, res) => {
   }
 
   const batch = Array.isArray(payload) ? payload : [payload];
-  const out = (await Promise.all(batch.map(handleRpc))).filter(Boolean);
+  let out;
+  try {
+    out = (await Promise.all(batch.map((m) => handleRpc(m)))).filter(Boolean);
+  } catch (err) {
+    res.writeHead(500, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify(rpcError(null, -32603, `Internal error: ${err.message}`)));
+  }
 
   if (!out.length) { res.writeHead(202); return res.end(); }
   res.writeHead(200, { 'content-type': 'application/json' });

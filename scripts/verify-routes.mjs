@@ -19,10 +19,23 @@ const ROUTE_CASES = [
     url: 'https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Senior-HPC-Storage-Engineer_JR2014997',
     expect: { route: 'workday', canAutoSubmit: false, wall: 'account-required' },
   },
+  // Tesla is a bespoke careers site behind bot protection: a plain fetch gets
+  // 403, so the detector must report `unknown` and refuse to call it
+  // submittable. This is exactly why the browser stage exists - a real browser
+  // reaches pages a bare fetch cannot. Asserting "not falsely submittable" is
+  // the property that matters and does not depend on a third party's mood.
   {
-    label: 'Tesla',
+    label: 'Tesla (bot-protected bespoke)',
     url: 'https://www.tesla.com/careers/search/job/internship-mechanical-engineer-fall-2026-244085',
-    expect: { route: 'bespoke', canAutoSubmit: true, wall: null },
+    expect: { canAutoSubmit: false },
+  },
+  // A dead posting must never fingerprint as an applicable form. Before this
+  // was fixed, a 404 page with no CAPTCHA on it returned bespoke +
+  // canAutoSubmit:true, and the agent would claim it could apply through it.
+  {
+    label: 'dead posting (404)',
+    url: 'https://job-boards.greenhouse.io/nosuchboard99999/jobs/1',
+    expect: { route: 'unknown', canAutoSubmit: false },
   },
 ];
 
@@ -52,9 +65,9 @@ for (const c of RESOLVE_CASES) {
 console.log('\nApply-route detection — never assume a platform');
 for (const c of ROUTE_CASES) {
   const r = await detectApplyRoute(c.url);
-  check(`${c.label} route`, r.route, c.expect.route);
-  check(`${c.label} can auto-submit`, r.canAutoSubmit, c.expect.canAutoSubmit);
-  check(`${c.label} wall`, r.wall, c.expect.wall);
+  for (const [key, want] of Object.entries(c.expect)) {
+    check(`${c.label} — ${key}`, r[key], want);
+  }
 }
 
 console.log(

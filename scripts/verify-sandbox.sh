@@ -69,18 +69,34 @@ if status != "done":
 content = (turn["state"].get("output") or {}).get("content")
 text = "".join(b.get("text", "") for b in content) if isinstance(content, list) else str(content)
 
-# 4. the harness must have used its own exec tool, not just talked about it
+# 4. The proof has to come from the tool response, not the model's prose.
+#    A model can write "SANDBOX-OK / Linux" without ever running anything, so
+#    asserting against its own summary proves nothing. Correlate instead: find
+#    the exec tool call, then assert its actual response carried the markers.
 events = call("GET", "/sessions/%s/turns/%s/events" % (sid, tid))["data"]
-used_exec = any(
-    (c.get("function") or {}).get("name") == "exec"
-    for e in events
-    for c in ((e.get("event", e)).get("tool_calls") or []))
+
+exec_call_ids = set()
+for entry in events:
+    ev = entry.get("event", entry)
+    for c in (ev.get("tool_calls") or []):
+        if (c.get("function") or {}).get("name") == "exec":
+            exec_call_ids.add(c.get("id"))
+
+exec_output = ""
+for entry in events:
+    ev = entry.get("event", entry)
+    if ev.get("type") in ("tool.response", "tool_response") or ev.get("tool_call_id"):
+        if ev.get("tool_call_id") in exec_call_ids:
+            exec_output += json.dumps(ev.get("content") or ev.get("output") or "")
+
+used_exec = bool(exec_call_ids)
 
 ok = True
 for label, cond in (
-        ("sandbox executed the code", "SANDBOX-OK" in text),
-        ("sandbox is Linux (host is macOS)", "Linux" in text),
-        ("harness used its exec tool", used_exec)):
+        ("harness called its exec tool", used_exec),
+        ("exec RESPONSE contains SANDBOX-OK", "SANDBOX-OK" in exec_output),
+        ("exec RESPONSE reports Linux (host is macOS)", "Linux" in exec_output),
+        ("model summary matches the tool output", "SANDBOX-OK" in text)):
     print("  %-34s %s" % (label, "PASS" if cond else "FAIL"))
     ok = ok and cond
 
