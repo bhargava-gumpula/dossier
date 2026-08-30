@@ -28,28 +28,46 @@ candidate does not have.
 name a company ─▶ find_jobs ─▶ Greenhouse · Ashby · Workday · Jobvite   (direct board APIs)
                             └▶ web search of the employer's own site    (everyone else)
                                         │
+                     ranked against YOUR résumé ← the few roles you actually fit,
+                                        │          not every title sharing a word
+                                        ▼
                             detect_apply_route  ← fingerprints the APPLY URL, never the
                                         │          careers landing page
                                         ▼
        inspect_form → tailor_resume → fill_form → submit_form  ◀── HELD FOR A HUMAN
-              (real browser)                          │
-                                            dashboard approve → sent
+              (real browser)              │            │
+                                          │            └▶ dashboard approve → sent
+                                          └▶ CAPTCHA or account wall?
+                                             stop, name it, hand over the filled form
 ```
 
 1. **Finds real postings.** Reads published job boards directly where they exist; falls back to
    searching the employer's own domain for the many companies that publish nothing
    machine-readable. Aggregators (LinkedIn, Indeed, Glassdoor) are excluded — they are not the
    employer, and applying through them is a different act.
-2. **Works out the route** by fingerprinting the real apply URL — never the careers landing page,
+2. **Ranks them against your résumé.** A large employer has hundreds of open roles, and
+   matching on shared words is close to meaningless — asking for "backend engineer" at one
+   company returned 32 roles of which 2 actually matched, the rest riding on the word
+   "engineer" alone, down to *Technical Recruiter | Engineering*. The whole board is scored
+   instead against what you have actually done: skills, the titles you have held, words from
+   your bullets, the areas you have worked in, and seniority. It is deterministic — no model
+   call — so it is instant and free, and each result shows the terms that surfaced it. Nothing
+   is hidden: the full board is one click away.
+3. **Works out the route** by fingerprinting the real apply URL — never the careers landing page,
    which at most large companies is a JavaScript marketing shell that reveals nothing.
-3. **Reads the actual form.** Greenhouse publishes a field schema, so it uses that when present.
+4. **Reads the actual form.** Greenhouse publishes a field schema, so it uses that when present.
    Otherwise it renders the page in a real headless browser and enumerates the fields that are
    genuinely there.
-4. **Tailors the résumé** to that specific role — by *reordering and promoting* real experience,
+5. **Tailors the résumé** to that specific role — by *reordering and promoting* real experience,
    never by inventing it (see below).
-5. **Fills every field** and attaches the tailored PDF.
-6. **Stops at a human approval gate.** Nothing is submitted until a person clicks approve on the
+6. **Fills every field** and attaches the tailored PDF.
+7. **Stops at a human approval gate.** Nothing is submitted until a person clicks approve on the
    dashboard.
+8. **Or names the wall, and hands the work over.** Where a CAPTCHA or an account wall makes
+   legitimate automated submission impossible, it does not call `submit_form` at all. The
+   dashboard marks the application `blocked: captcha` — never "ready" — and shows what stopped
+   it, a link to finish the form, the tailored PDF, and every answer it worked out, so the
+   person retypes nothing rather than starting over.
 
 ### Tailoring reorders; it never invents
 
