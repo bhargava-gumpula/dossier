@@ -213,10 +213,25 @@ this repository.
 
 ## Qodo Code Review Evidence
 
-Every substantive change in this project went through
-**[PR #2](https://github.com/bhargava-gumpula/dossier/pull/2)** (40 files, ~7,300 lines), which
-was reviewed by **Qodo** via `/agentic_review` and merged only afterwards. `main` is
-branch-protected with `enforce_admins: true`, so nothing reaches it any other way.
+Every change in this project went through a pull request. `main` is branch-protected with
+`enforce_admins: true`, so nothing reaches it any other way — there are no direct pushes.
+
+The substantive Qodo review is
+**[PR #2](https://github.com/bhargava-gumpula/dossier/pull/2)** (40 files, ~7,300 lines),
+reviewed via `/agentic_review` and merged only afterwards. That review is what the rest of this
+section documents.
+
+**Two later PRs could not be reviewed, and it is worth being exact about why.** Partway through
+the hackathon Qodo reviews were paused on this account — `/agentic_review` replies *"Qodo reviews
+are paused for this user"*, a plan or seat limit rather than anything about the code. PRs #3 and
+#4 were opened, described and merged the same way, but no Qodo review ran on them.
+
+| PR | What it was | Qodo review |
+| --- | --- | --- |
+| [#1](https://github.com/bhargava-gumpula/dossier/pull/1) | Removed a scratch line from `.env.example` | — (trivial) |
+| [**#2**](https://github.com/bhargava-gumpula/dossier/pull/2) | Sandbox verification, job discovery, apply-route detection | **Yes — 26 findings, below** |
+| [#3](https://github.com/bhargava-gumpula/dossier/pull/3) | A failed run reported "working" for ever | No — reviews paused |
+| [#4](https://github.com/bhargava-gumpula/dossier/pull/4) | Landing hero, shared design system, résumé-ranked postings, CAPTCHA hand-off | No — reviews paused |
 
 Qodo raised **26 findings**. Five were already fixed by later commits on the branch and one was
 outdated by the time the review settled, leaving **20 live**. All 20 were worked: **19 fixed**, and
@@ -276,6 +291,14 @@ verification and this documentation. Architecture and technical decisions are th
 understood, and can be explained on request (rule 13). The harness findings above are examples:
 they were derived by reading TrueForge's behaviour against its docs, and they are why the
 approval gate works.
+
+## Credits
+
+The landing page hero is adapted from a [21st.dev](https://21st.dev) component, ported off
+Tailwind, shadcn and TypeScript into plain React and CSS with no new dependencies — Tailwind's
+preflight is a global reset and both surfaces share one bundle, so installing it would have
+restyled the dashboard. Per hackathon rule 9, third-party templates are permitted; everything
+else here is original work built during the hackathon window.
 
 ## License
 
