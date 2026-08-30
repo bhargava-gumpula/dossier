@@ -14,8 +14,16 @@
   "requiresSponsorship": "No",
   "yearsExperience": 6,
   "skills": [
-    "Python", "TypeScript", "Go", "PostgreSQL", "Kafka", "Kubernetes",
-    "distributed systems", "payments infrastructure", "observability"
+    "Python",
+    "TypeScript",
+    "Go",
+    "PostgreSQL",
+    "Kafka",
+    "Kubernetes",
+    "distributed systems",
+    "payments infrastructure",
+    "observability",
+    "Terraform"
   ],
   "experience": [
     {
@@ -26,7 +34,8 @@
       "bullets": [
         "Led the ledger service rewrite that cut settlement latency from 900ms to 210ms at p99.",
         "Built the idempotency layer handling 40M payment intents per month with zero double-charges in 18 months.",
-        "Owned on-call for the payments core; reduced page volume 60% by fixing retry storms at the source."
+        "Owned on-call for the payments core; reduced page volume 60% by fixing retry storms at the source.",
+        "Cut cloud spend 28% by right-sizing the ledger service fleet with Terraform-managed autoscaling."
       ]
     },
     {
@@ -41,6 +50,10 @@
     }
   ],
   "education": [
-    { "school": "University of Illinois Urbana-Champaign", "degree": "BS Computer Science", "year": "2019" }
+    {
+      "school": "University of Illinois Urbana-Champaign",
+      "degree": "BS Computer Science",
+      "year": "2019"
+    }
   ]
 }

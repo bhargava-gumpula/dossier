@@ -27,3 +27,6 @@ screenshots/
 *.log
 .DS_Store
 demo/received-applications.jsonl
+dashboard/queue.json
+dashboard/dist/
+fixtures/persona/history/

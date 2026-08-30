@@ -13,10 +13,11 @@
 // Chromium exactly as it does to fetch. Reported honestly.
 
 import { createServer } from 'node:http';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectForm, fillForm, getFill, dropFill } from './lib/browser.js';
+import { loadProfile, applyEdits, rebuildResume, snapshot, listHistory } from './lib/profile.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // The sandbox is a remote container with no view of this machine's disk, so the
@@ -24,6 +25,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // disk has to arrive through a tool that runs here, on the host.
 const PROFILE_PATH = process.env.DOSSIER_PROFILE ?? `${ROOT}/fixtures/persona/profile.json`;
 const RESUME_PATH = process.env.DOSSIER_RESUME ?? `${ROOT}/fixtures/persona/resume.pdf`;
+const RESUME_HTML = RESUME_PATH.replace(/\.pdf$/, '.html');
 
 const PORT = Number(process.env.APPLY_MCP_PORT ?? 8794);
 const PROTOCOL_VERSION = '2025-06-18';
@@ -38,6 +40,41 @@ const TOOLS = [
       'of truth when filling forms, and never invent anything not present here.',
     annotations: { title: 'Get candidate profile', readOnlyHint: true, destructiveHint: false },
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'update_profile',
+    description:
+      "Edit the candidate's profile and rebuild their resume PDF from it. Use this " +
+      'when the human asks to add a skill, add an accomplishment, or correct a ' +
+      'detail. Edits are structured and versioned, and the previous profile is ' +
+      'snapshotted so any change can be undone.\n\n' +
+      'Only make edits the human actually asked for. Do NOT add skills or ' +
+      'accomplishments on your own to improve a match score - that is the ' +
+      'candidate claiming something, and it has to be their claim, not yours.',
+    annotations: { title: 'Update candidate profile', readOnlyHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        edits: {
+          type: 'array',
+          description: 'Structured edits to apply.',
+          items: {
+            type: 'object',
+            properties: {
+              op: {
+                type: 'string',
+                enum: ['add_skill', 'remove_skill', 'add_bullet', 'remove_bullet', 'set_field'],
+              },
+              value: { type: 'string', description: 'Skill name, bullet text, or new field value.' },
+              company: { type: 'string', description: 'For add_bullet/remove_bullet: which employer.' },
+              field: { type: 'string', description: 'For set_field: which profile field.' },
+            },
+            required: ['op'],
+          },
+        },
+      },
+      required: ['edits'],
+    },
   },
   {
     name: 'inspect_form',
@@ -104,6 +141,40 @@ function toolGetCandidateProfile() {
     note:
       'Pass resume_path straight to fill_form. Do not try to read these files ' +
       'from the sandbox - it is a remote container and cannot see them.',
+  };
+}
+
+async function toolUpdateProfile({ edits = [] }) {
+  if (!existsSync(PROFILE_PATH)) return { error: `no profile at ${PROFILE_PATH}` };
+  if (!Array.isArray(edits) || !edits.length) return { error: 'no edits supplied' };
+
+  const backup = snapshot(PROFILE_PATH);
+  const profile = loadProfile(PROFILE_PATH);
+  const { profile: updated, applied, rejected } = applyEdits(profile, edits);
+
+  if (!applied.length) {
+    return { updated: false, applied, rejected, note: 'Nothing changed.' };
+  }
+
+  writeFileSync(PROFILE_PATH, JSON.stringify(updated, null, 2));
+  let resumeRebuilt = false;
+  try {
+    await rebuildResume(PROFILE_PATH, RESUME_HTML, RESUME_PATH);
+    resumeRebuilt = true;
+  } catch (err) {
+    return { updated: true, applied, rejected, resume_rebuilt: false,
+             error: `profile saved but resume rebuild failed: ${err.message.slice(0, 120)}` };
+  }
+
+  return {
+    updated: true,
+    applied,
+    rejected,
+    resume_rebuilt: resumeRebuilt,
+    resume_path: RESUME_PATH,
+    previous_version: backup.split('/').pop(),
+    versions_kept: listHistory(PROFILE_PATH).length,
+    note: 'Profile updated and resume PDF rebuilt. The previous version is kept and can be restored.',
   };
 }
 
@@ -182,6 +253,7 @@ async function toolSubmitForm({ fill_id }) {
 
 const IMPL = {
   get_candidate_profile: toolGetCandidateProfile,
+  update_profile: toolUpdateProfile,
   inspect_form: toolInspectForm,
   fill_form: toolFillForm,
   submit_form: toolSubmitForm,
