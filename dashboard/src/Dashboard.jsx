@@ -167,7 +167,7 @@ function Detail({ job, profile, tab, setTab, act, busy, refresh }) {
   const [answers, setAnswers] = useState({});
   const [reason, setReason] = useState('');
 
-  useEffect(() => { setAnswer(''); setReason(''); }, [job.id, live.pendingToolCallId]);
+  useEffect(() => { setAnswers({}); setReason(''); }, [job.id, live.pendingToolCallId]);
 
   return (
     <>
