@@ -11,6 +11,7 @@
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { extractText, storeUpload, skimResume } from '../mcp/lib/resume-intake.js';
+import { rankPositions } from './match.js';
 import { resolve, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -151,6 +152,13 @@ async function jobLive(job) {
     status = 'failed';
     turnError = state.message || 'the agent run failed';
   }
+  // A cancelled turn has exactly the same problem and was not covered: it is
+  // not a failure, but it is just as finished, and it fell through to the same
+  // stale "working". Starting many runs at once is how a queue ends up full of
+  // them, so this is the common case, not the rare one.
+  else if (state.status === 'cancelled') {
+    status = 'cancelled';
+  }
   else if (state.status === 'done') {
     // "submitted" has to come from what submit_form actually reported, not from
     // the human having approved it: an approved submit can still be refused by a
@@ -196,7 +204,23 @@ async function jobLive(job) {
 const api = {
   async 'GET /api/state'() {
     const q = loadQueue();
-    const jobs = await Promise.all(q.jobs.map(async (j) => ({ ...j, live: await jobLive(j) })));
+    const all = await Promise.all(q.jobs.map(async (j) => ({ ...j, live: await jobLive(j) })));
+
+    // A cancelled run is dead: its turn cannot be resumed, so the row could
+    // never change again. It is dropped rather than parked in the rail for
+    // ever. Everything else stays - including failures, which the human needs
+    // to see - and it is pruned from the queue too, so the dead sessions are
+    // not re-fetched from TrueForge on every poll.
+    const jobs = all.filter((j) => j.live?.status !== 'cancelled');
+    if (jobs.length !== all.length) {
+      const keep = new Set(jobs.map((j) => j.id));
+      await withQueue(() => {
+        const cur = loadQueue();
+        cur.jobs = cur.jobs.filter((j) => keep.has(j.id) || !all.some((a) => a.id === j.id));
+        saveQueue(cur);
+      });
+    }
+
     const profile = existsSync(PROFILE) ? JSON.parse(readFileSync(PROFILE, 'utf8')) : null;
     if (profile) delete profile._comment;
     return { jobs, profile };
@@ -207,19 +231,37 @@ const api = {
   async 'POST /api/positions'(body) {
     const { company, role } = body;
     if (!company) throw new Error('company required');
-    const r = await mcpCall(JOBS_MCP, 'find_jobs', { company, role, limit: 40 });
+
+    // The whole board, deliberately unfiltered. Ranking against a résumé needs
+    // every posting: the board arrives in its own order, so filtering or
+    // truncating first hands the ranker an arbitrary slice - Anthropic's first
+    // 200 of 571 are alphabetical and contain one "Software Engineer".
+    let r = await mcpCall(JOBS_MCP, 'find_jobs', { company, limit: 1000 });
+
+    // No machine-readable board. The search fallback has nothing to look for
+    // without the role, so that one call does need it.
+    if (!r.found && role) {
+      r = await mcpCall(JOBS_MCP, 'find_jobs', { company, role, limit: 40 });
+    }
+
+    const profile = existsSync(PROFILE) ? JSON.parse(readFileSync(PROFILE, 'utf8')) : null;
+    const all = (r.jobs ?? []).map((j, i) => ({
+      key: j.id ?? `p${i}`,
+      title: j.title ?? j.url,
+      location: j.location ?? null,
+      url: j.applyUrl ?? j.url,
+    }));
+    const { ranked, bestFits, matched } = rankPositions(all, profile, role);
+
     return {
       company,
       found: r.found,
       source: r.source ?? null,
       careersUrl: r.careers_url ?? null,
       note: r.note ?? r.reason ?? null,
-      positions: (r.jobs ?? []).map((j, i) => ({
-        key: j.id ?? `p${i}`,
-        title: j.title ?? j.url,
-        location: j.location ?? null,
-        url: j.applyUrl ?? j.url,
-      })),
+      matchedAgainstResume: matched,
+      bestFits,
+      positions: ranked,
     };
   },
 

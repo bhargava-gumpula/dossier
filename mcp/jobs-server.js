@@ -257,10 +257,16 @@ async function handleRpc(msg) {
 // A negative limit turns slice(0, n) into "everything except the last n", so a
 // caller asking for -1 results got nearly all of them. Anything not a sane
 // positive integer falls back to the documented default.
+//
+// The ceiling is high because a caller that means to rank a board itself needs
+// the whole board: the postings arrive in board order, so a low cap hands back
+// an alphabetical slice - Anthropic's first 200 of 571 reach "H" and contain a
+// single "Software Engineer". The default stays small, so this only affects a
+// caller that explicitly asks for more.
 function clampLimit(n, fallback = 10) {
   const v = Number(n);
   if (!Number.isFinite(v) || v < 1) return fallback;
-  return Math.min(Math.floor(v), 200);
+  return Math.min(Math.floor(v), 1000);
 }
 
 function readBody(req) {

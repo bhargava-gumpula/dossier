@@ -17,6 +17,7 @@ const LABEL = {
   'awaiting-approval': 'awaiting you', submitted: 'submitted',
   blocked: 'blocked', ready: 'ready', starting: 'starting',
   failed: 'failed', 'not-submitted': 'not submitted',
+  cancelled: 'cancelled',
 };
 
 export default function Dashboard({ onHome }) {
