@@ -105,7 +105,12 @@ export default function Dashboard({ onHome }) {
           {startable.length > 0 && (
             <button className="btn" style={{ marginTop: 10, width: '100%' }}
               disabled={busy}
-              onClick={() => startable.forEach((j) => act('/api/jobs/start', { id: j.id }))}>
+              onClick={async () => {
+                // One at a time. The server serialises queue writes anyway, but
+                // firing these together also opened a burst of agent sessions
+                // with nothing pacing them.
+                for (const j of startable) await act('/api/jobs/start', { id: j.id });
+              }}>
               Start all ({startable.length})
             </button>
           )}

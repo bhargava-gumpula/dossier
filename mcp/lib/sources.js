@@ -145,16 +145,36 @@ export async function workdayJobs(slug, { limit = 20, maxJobs = 200 } = {}) {
   for (let o = limit; o < total; o += limit) offsets.push(o);
 
   // Paginate the one live board in small concurrent batches.
+  //
+  // A page that fails and a page that is genuinely empty both used to arrive
+  // here as "nothing", so a timed-out page silently removed its roles and the
+  // result was still presented as the complete list. find_jobs could then say
+  // there was no matching requisition when there was one, on a page that never
+  // loaded. Failures are retried once and whatever is still missing is reported.
   const postings = [...first.jobPostings];
+  const failed = [];
   for (let i = 0; i < offsets.length; i += 5) {
-    const batch = await Promise.all(
-      offsets.slice(i, i + 5).map((o) => workdayPage(origin, slug, site, o, limit)),
-    );
-    postings.push(...batch.flatMap((r) => r?.jobPostings ?? []));
+    const slice = offsets.slice(i, i + 5);
+    const batch = await Promise.all(slice.map((o) => workdayPage(origin, slug, site, o, limit)));
+    batch.forEach((r, k) => {
+      if (r?.jobPostings) postings.push(...r.jobPostings);
+      else failed.push(slice[k]);
+    });
     if (postings.length >= maxJobs) break;
   }
 
-  return postings.slice(0, maxJobs).map((j) => ({
+  if (failed.length) {
+    const retried = await Promise.all(failed.map((o) => workdayPage(origin, slug, site, o, limit)));
+    const stillFailed = [];
+    retried.forEach((r, k) => {
+      if (r?.jobPostings) postings.push(...r.jobPostings);
+      else stillFailed.push(failed[k]);
+    });
+    failed.length = 0;
+    failed.push(...stillFailed);
+  }
+
+  const jobs = postings.slice(0, maxJobs).map((j) => ({
     source: 'workday',
     board: `${slug}/${site}`,
     id: (j.bulletFields ?? [])[0] ?? j.externalPath,
@@ -163,6 +183,14 @@ export async function workdayJobs(slug, { limit = 20, maxJobs = 200 } = {}) {
     applyUrl: `${origin}/en-US/${site}${j.externalPath}`,
     postedOn: j.postedOn ?? null,
   }));
+
+  // Carried on the array so callers keep the plain list they expect, and can
+  // still tell the human the listing was partial rather than implying it was all.
+  if (failed.length) {
+    jobs.incomplete = true;
+    jobs.missingPages = failed.length;
+  }
+  return jobs;
 }
 
 // Jobvite publishes no JSON feed, but its board pages carry a stable link shape
@@ -297,5 +325,12 @@ export async function resolveCompany(company) {
   const rank = { greenhouse: 0, ashby: 1, workday: 2, jobvite: 3 };
   results.sort((a, b) => rank[a.source] - rank[b.source]);
   const best = results[0];
-  return { found: true, company, source: best.source, board: best.slug, jobs: best.jobs };
+  return {
+    found: true, company, source: best.source, board: best.slug, jobs: best.jobs,
+    // Propagate a partial listing so the caller does not present it as the lot.
+    ...(best.jobs.incomplete
+      ? { incomplete: true,
+          note: `${best.jobs.missingPages} page(s) of this board did not load, so this list may be missing roles.` }
+      : {}),
+  };
 }

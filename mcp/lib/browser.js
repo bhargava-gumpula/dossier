@@ -422,9 +422,14 @@ export async function fillForm(url, { answers = {}, resumePath = null } = {}) {
   const payload = await readFormPayload(page, url, resumePath);
 
   const fillId = `fill_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  fills.set(fillId, { url, createdAt: Date.now(), applied, resumePath, payload, ctx, page });
+  // wall travels with the fill: submit_form must refuse an account-walled form,
+  // and re-deriving it there from page text alone missed what filling already knew.
+  fills.set(fillId, { url, createdAt: Date.now(), applied, resumePath, payload, ctx, page, wall });
 
   return {
+    // Both spellings, deliberately. submit_form's schema takes fill_id, and a
+    // consumer reading the documented name off this result found only fillId.
+    fill_id: fillId,
     fillId,
     url,
     filled: true,
@@ -436,13 +441,29 @@ export async function fillForm(url, { answers = {}, resumePath = null } = {}) {
     ready_to_submit: blocking.length === 0,
     blocking,
     verified: true,
+    // What a human actually needs to finish this themselves. The filled page is
+    // headless and cannot be handed over as a session, so hand over the content
+    // instead rather than implying an interactive browser exists.
+    handoff: wall
+      ? {
+          completeAt: url,
+          why: wall === 'captcha'
+            ? 'a CAPTCHA must be solved by a person'
+            : 'this employer requires a candidate account',
+          interactiveBrowser: false,
+          answers: applied.map((a) => ({ field: a.label ?? a.name, value: a.value })),
+        }
+      : null,
     screenshotBase64: shot.toString('base64'),
     note: blocking.length === 0
       ? 'Form is filled and verified complete. Nothing has been submitted. This report ' +
         'IS the verification - do not inspect the form again. Call submit_form once.'
       : wall
         ? `Form is filled but ${wall === 'captcha' ? 'a CAPTCHA' : 'an account wall'} blocks ` +
-          'automated submission. Do not call submit_form. Hand the filled form to the human.'
+          'automated submission. Do not call submit_form. The fill lives in a headless ' +
+          'browser the human cannot type into, so tell them plainly: this form must be ' +
+          'completed by hand at the URL above. Give them the values from `handoff.answers` ' +
+          'so they only have to re-enter them, and the screenshot to check against.'
         : `Form is filled but ${missingRequired.length} required field(s) still have no answer. ` +
           'Do not call submit_form yet - ask the human for the missing values.',
   };

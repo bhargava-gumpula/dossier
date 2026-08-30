@@ -43,6 +43,19 @@ function loadQueue() {
 }
 function saveQueue(q) { writeFileSync(QUEUE, JSON.stringify(q, null, 2)); }
 
+// Every mutation loads the whole queue and writes the whole queue back. That is
+// fine one at a time and lossy in parallel: "Start all" fires its requests
+// together, each reads the same queue, and the last write erases the sessionIds
+// the others just recorded - leaving live TrueForge sessions with no job
+// pointing at them. Mutations are serialised so each one reads what the previous
+// one wrote. Reads that do not write are left alone.
+let queueLock = Promise.resolve();
+function withQueue(fn) {
+  const run = queueLock.then(() => fn(), () => fn());
+  queueLock = run.then(() => {}, () => {});
+  return run;
+}
+
 // ------------------------------------------------------------------ trueforge
 async function tf(method, path, body) {
   const res = await fetch(TF + path, {
@@ -79,6 +92,7 @@ async function jobLive(job) {
   let approval = null;
   let resumePath = null;
   let tailoring = null;
+  let submitResult = null;
   for (const entry of events) {
     const ev = entry.event ?? entry;
     for (const c of ev.tool_calls ?? []) {
@@ -98,6 +112,17 @@ async function jobLive(job) {
     }
     // tailor_resume reports the PDF that will actually be attached.
     const payload = ev.content ?? ev.output;
+    // submit_form's own verdict, read straight off its response.
+    if (payload && typeof payload === 'string'
+        && (payload.includes('would_have_submitted_to') || payload.includes('"submitted"'))) {
+      try {
+        const parsed = JSON.parse(payload);
+        if (typeof parsed.submitted === 'boolean') {
+          submitResult = { submitted: parsed.submitted, wall: parsed.wall ?? null,
+                           error: parsed.error ?? null, mode: parsed.mode ?? null };
+        }
+      } catch { /* not the response we're after */ }
+    }
     if (payload && typeof payload === 'string' && payload.includes('resume_path')) {
       try {
         const parsed = JSON.parse(payload);
@@ -116,7 +141,16 @@ async function jobLive(job) {
   let status = state.status === 'running' ? 'working' : (job.status ?? 'idle');
   if (pending?.type === 'tool.approval_required') status = 'awaiting-approval';
   else if (pending?.type === 'tool.response_required') status = 'needs-answer';
-  else if (state.status === 'done') status = job.submitted ? 'submitted' : 'ready';
+  else if (state.status === 'done') {
+    // "submitted" has to come from what submit_form actually reported, not from
+    // the human having approved it: an approved submit can still be refused by a
+    // CAPTCHA or an account wall, and saying "submitted" then is the one lie
+    // this project must not tell. A refusal is surfaced as its wall instead.
+    status = submitResult?.submitted === true ? 'submitted'
+      : submitResult?.wall ? `blocked: ${submitResult.wall}`
+      : job.approved ? 'not-submitted'
+      : 'ready';
+  }
 
   const content = state.output?.content;
   const output = Array.isArray(content)
@@ -124,9 +158,11 @@ async function jobLive(job) {
     : (content ?? '');
 
   if (resumePath) {
-    const q2 = loadQueue();
-    const row = q2.jobs.find((x) => x.id === job.id);
-    if (row && row.resumePath !== resumePath) { row.resumePath = resumePath; saveQueue(q2); }
+    await withQueue(async () => {
+      const q2 = loadQueue();
+      const row = q2.jobs.find((x) => x.id === job.id);
+      if (row && row.resumePath !== resumePath) { row.resumePath = resumePath; saveQueue(q2); }
+    });
   }
 
   return {
@@ -141,6 +177,7 @@ async function jobLive(job) {
     approval,
     steps,
     output,
+    submitResult,
   };
 }
 
@@ -180,6 +217,7 @@ const api = {
   async 'POST /api/positions/queue'(body) {
     const { company, positions = [] } = body;
     if (!positions.length) throw new Error('no positions selected');
+    return withQueue(() => {
     const q = loadQueue();
     const added = [];
     for (const p of positions) {
@@ -197,9 +235,11 @@ const api = {
     }
     saveQueue(q);
     return { added };
+    });
   },
 
   async 'POST /api/jobs'(body) {
+    return withQueue(() => {
     const q = loadQueue();
     const job = {
       id: `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
@@ -213,16 +253,31 @@ const api = {
     q.jobs.unshift(job);
     saveQueue(q);
     return { job };
+    });
   },
 
   async 'POST /api/jobs/start'(body) {
-    const q = loadQueue();
-    const job = q.jobs.find((j) => j.id === body.id);
-    if (!job) throw new Error('unknown job');
-    const session = (await tf('POST', '/sessions', { agent: { name: AGENT } })).data;
-    job.sessionId = session.id;
-    job.status = 'working';
-    saveQueue(q);
+    // Guarded and serialised: a second click used to open another session and
+    // overwrite the only stored reference, so the first kept running with
+    // nothing able to monitor or answer it.
+    const started = await withQueue(async () => {
+      const q = loadQueue();
+      const job = q.jobs.find((j) => j.id === body.id);
+      if (!job) throw new Error('unknown job');
+      if (job.sessionId && job.status === 'working') {
+        return { already: true, job, sessionId: job.sessionId };
+      }
+      const session = (await tf('POST', '/sessions', { agent: { name: AGENT } })).data;
+      job.sessionId = session.id;
+      job.status = 'working';
+      saveQueue(q);
+      return { already: false, job, sessionId: session.id };
+    });
+    if (started.already) {
+      return { started: false, alreadyRunning: true, sessionId: started.sessionId };
+    }
+    const job = started.job;
+    const session = { id: started.sessionId };
 
     const ask = job.url
       ? `Apply for me to this job: ${job.url}\n\nGet the candidate profile, detect the apply route, inspect the form, fill every field, then submit if the route permits it.`
@@ -265,8 +320,19 @@ const api = {
       }],
       stream: false,
     });
-    job.submitted = true;
-    saveQueue(q);
+    // Approving only lets submit_form run; it can still refuse a CAPTCHA or an
+    // account wall, or fail outright. Recording "submitted" here made the
+    // dashboard claim an application had been sent whenever the human clicked
+    // approve. What is true at this point is that the human approved it - the
+    // submission itself is read back from the tool's own result in jobLive.
+    //
+    // Re-read under the lock rather than writing back the copy loaded before the
+    // network call, which by now may be stale.
+    await withQueue(() => {
+      const q2 = loadQueue();
+      const row = q2.jobs.find((j) => j.id === body.id);
+      if (row) { row.approved = true; saveQueue(q2); }
+    });
     return { approved: true };
   },
 
@@ -287,10 +353,12 @@ const api = {
   },
 
   async 'POST /api/jobs/remove'(body) {
-    const q = loadQueue();
-    q.jobs = q.jobs.filter((j) => j.id !== body.id);
-    saveQueue(q);
-    return { removed: true };
+    return withQueue(() => {
+      const q = loadQueue();
+      q.jobs = q.jobs.filter((j) => j.id !== body.id);
+      saveQueue(q);
+      return { removed: true };
+    });
   },
 
   // Serve the resume that will actually be attached, so the gate is not approved

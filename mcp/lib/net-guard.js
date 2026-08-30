@@ -8,7 +8,9 @@
 // origins, and it is the only way a private address is ever reachable.
 
 import { lookup } from 'node:dns/promises';
+import { lookup as lookupCb } from 'node:dns';
 import net from 'node:net';
+import { Agent } from 'undici';
 
 // Read at call time, not at import time. ES imports are hoisted and evaluated
 // before any statement in the importing module, so snapshotting the environment
@@ -19,6 +21,8 @@ function allowed() {
       .split(',').map((s) => s.trim()).filter(Boolean),
   );
 }
+
+const DNS_TIMEOUT_MS = 5000;
 
 export function isBlockedIp(ip) {
   if (net.isIPv4(ip)) {
@@ -57,13 +61,45 @@ export async function assertAllowedUrl(raw) {
   }
   if (/^localhost$|\.local$|\.internal$/i.test(host)) throw new Error('blocked hostname');
 
+  // The resolver gets its own deadline. Callers put an AbortSignal on fetch, but
+  // that signal does not cover this lookup, so a resolver that simply never
+  // answers used to hang the whole tool well past its advertised timeout.
   let addrs;
-  try { addrs = await lookup(host, { all: true }); }
-  catch { throw new Error('host does not resolve'); }
+  try {
+    addrs = await Promise.race([
+      lookup(host, { all: true }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('dns timeout')), DNS_TIMEOUT_MS)),
+    ]);
+  } catch (err) {
+    throw new Error(err.message === 'dns timeout' ? 'host did not resolve in time' : 'host does not resolve');
+  }
   if (!addrs.length || addrs.some((a) => isBlockedIp(a.address))) {
     throw new Error('resolves to a blocked address range');
   }
   return u;
 }
+
+// Checking a name here and letting fetch resolve it again at connect time is a
+// gap, not a guard: a hostname under someone else's control can answer with a
+// public address for the check and a private one microseconds later, and the
+// connection goes wherever the second answer points. Closing that means the
+// address the socket actually uses has to be the one that was vetted, so the
+// check moves into the connection itself.
+//
+// A literal IP never reaches this - the runtime dials it directly - which is
+// why an explicitly allowed origin such as the demo employer on 127.0.0.1 still
+// connects: assertAllowedUrl has already approved it by origin.
+function guardedLookup(hostname, options, callback) {
+  lookupCb(hostname, options, (err, address, family) => {
+    if (err) return callback(err);
+    const list = Array.isArray(address) ? address : [{ address, family }];
+    const bad = list.find((a) => isBlockedIp(a.address));
+    if (bad) return callback(new Error(`blocked address range: ${bad.address}`));
+    return callback(null, address, family);
+  });
+}
+
+// Use this dispatcher for any fetch that takes a caller-supplied URL.
+export const guardedDispatcher = new Agent({ connect: { lookup: guardedLookup } });
 
 export function allowedOrigins() { return [...allowed()]; }

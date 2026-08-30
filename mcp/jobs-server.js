@@ -182,6 +182,7 @@ async function toolFindJobs({ company, role, limit = 10 }) {
     total_matching: total,
     ambiguous: Boolean(role) && total > 1,
     jobs: jobs.slice(0, clampLimit(limit)),
+    ...(r.incomplete ? { incomplete: true, incomplete_note: r.note } : {}),
     note:
       Boolean(role) && total > 1
         ? 'Several roles matched. Present these to the human and let them pick ' +

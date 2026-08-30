@@ -86,9 +86,28 @@ export function applyEdits(profile, edits = []) {
   const applied = [];
   const rejected = [];
 
+  // The schema requires only `op`, so an edit can arrive with no value at all.
+  // add_skill then pushed undefined, which serialises to null, printed as "null"
+  // on the rebuilt resume, and made every later skill or bullet operation throw
+  // on .toLowerCase(). A missing value is a rejected edit, not an applied one.
+  const NEEDS_VALUE = ['add_skill', 'remove_skill', 'add_bullet', 'remove_bullet', 'set_field'];
+  const NEEDS_COMPANY = ['add_bullet', 'remove_bullet'];
+
   for (const edit of edits) {
     const { op, value, company, field } = edit;
     try {
+      if (NEEDS_VALUE.includes(op) && (typeof value !== 'string' || !value.trim())) {
+        rejected.push({ ...edit, reason: `${op} needs a non-empty string value` });
+        continue;
+      }
+      if (NEEDS_COMPANY.includes(op) && (typeof company !== 'string' || !company.trim())) {
+        rejected.push({ ...edit, reason: `${op} needs the employer in "company"` });
+        continue;
+      }
+      if (op === 'set_field' && (typeof field !== 'string' || !field.trim())) {
+        rejected.push({ ...edit, reason: 'set_field needs "field"' });
+        continue;
+      }
       if (op === 'add_skill') {
         const skills = profile.skills ?? (profile.skills = []);
         if (skills.some((s) => s.toLowerCase() === String(value).toLowerCase())) {

@@ -57,7 +57,11 @@ const CAREERS_EMAIL =
   /mailto:([a-z0-9._%+-]*(?:career|job|recruit|hiring|talent|resume|cv)[a-z0-9._%+-]*@[a-z0-9.-]+\.[a-z]{2,})/ig;
 
 
-import { assertAllowedUrl } from './net-guard.js';
+import { assertAllowedUrl, guardedDispatcher } from './net-guard.js';
+// undici's own fetch, because the dispatcher that pins DNS at connect time is
+// an undici Agent and the global fetch will not accept one from a separately
+// installed copy. Same spec-compliant API either way.
+import { fetch as guardedFetch } from 'undici';
 
 async function fetchPage(url, timeoutMs = 20000) {
   const ctl = new AbortController();
@@ -67,11 +71,16 @@ async function fetchPage(url, timeoutMs = 20000) {
     // Redirects are followed by hand so each hop can be re-validated: a public
     // host is free to redirect into a private range.
     for (let hop = 0; hop < 6; hop++) {
+      // Two layers, deliberately: assertAllowedUrl rejects an address that is
+      // already known to be private, and the dispatcher re-checks whatever the
+      // resolver returns at the moment the socket is opened, so a name that
+      // changes its answer in between cannot be used to reach a private host.
       await assertAllowedUrl(current);
-      const res = await fetch(current, {
+      const res = await guardedFetch(current, {
         redirect: 'manual',
         headers: { 'user-agent': UA, accept: 'text/html,application/xhtml+xml' },
         signal: ctl.signal,
+        dispatcher: guardedDispatcher,
       });
       if (res.status >= 300 && res.status < 400) {
         const loc = res.headers.get('location');

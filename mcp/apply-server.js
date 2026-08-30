@@ -146,7 +146,13 @@ const TOOLS = [
       'STOP before submitting. Returns a screenshot of the completed form and a ' +
       'fill_id. Nothing is submitted. Answer keys are matched to fields by label, ' +
       'so use the labels reported by inspect_form.',
-    annotations: { title: 'Fill application form', readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+    // Not read-only, whatever it looks like from here. Filling types into a page
+    // this project does not control, and that page's own scripts are free to
+    // transmit each value as it is entered - so candidate data can reach the
+    // employer before the approval gate, which only governs submit_form. The
+    // annotation said otherwise, which was the misleading part. Still not
+    // destructive: it does not submit.
+    annotations: { title: 'Fill application form', readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -196,7 +202,23 @@ function toolGetCandidateProfile() {
   };
 }
 
-async function toolUpdateProfile({ edits = [] }) {
+// The profile is a read-modify-write against one file, and the MCP transport
+// runs batched calls concurrently, so two edits could both start from the same
+// old profile and the later write would silently drop the earlier one. Every
+// update is serialised through this lock. It is per-process, which is the only
+// scope that matters here - one apply server owns the file.
+let profileLock = Promise.resolve();
+function withProfileLock(fn) {
+  const run = profileLock.then(fn, fn);
+  profileLock = run.then(() => {}, () => {});
+  return run;
+}
+
+async function toolUpdateProfile(args) {
+  return withProfileLock(() => updateProfileLocked(args));
+}
+
+async function updateProfileLocked({ edits = [] }) {
   if (!existsSync(PROFILE_PATH)) return { error: `no profile at ${PROFILE_PATH}` };
   if (!Array.isArray(edits) || !edits.length) return { error: 'no edits supplied' };
 
@@ -214,8 +236,23 @@ async function toolUpdateProfile({ edits = [] }) {
     await rebuildResume(PROFILE_PATH, RESUME_HTML, RESUME_PATH);
     resumeRebuilt = true;
   } catch (err) {
-    return { updated: true, applied, rejected, resume_rebuilt: false,
-             error: `profile saved but resume rebuild failed: ${err.message.slice(0, 120)}` };
+    // The profile is the source of truth for what an employer receives, so it
+    // must not be left ahead of the PDF that actually gets attached: that
+    // combination sends new answers with the old resume. Put the profile back
+    // the way it was and report the edit as not applied.
+    let rolledBack = false;
+    try { writeFileSync(PROFILE_PATH, readFileSync(backup)); rolledBack = true; } catch {}
+    return {
+      updated: false,
+      applied: [],
+      rejected,
+      attempted: applied,
+      resume_rebuilt: false,
+      rolled_back: rolledBack,
+      error:
+        `resume rebuild failed, so the profile was ${rolledBack ? 'rolled back' : 'LEFT CHANGED (rollback also failed)'}` +
+        ` and nothing was edited: ${err.message.slice(0, 120)}`,
+    };
   }
 
   return {
@@ -363,6 +400,25 @@ async function toolSubmitForm({ fill_id }) {
       error:
         'This form requires a CAPTCHA. This agent does not solve CAPTCHAs. The ' +
         'form is filled and waiting - a human must complete the CAPTCHA and click submit.',
+    };
+  }
+
+  // The contract promises account-walled forms are refused, and only the CAPTCHA
+  // half of that was enforced. Both the wall seen while filling and the wall
+  // visible now count: without this the click loop below falls through to a
+  // generic "Apply" control, which on a sign-in page is the wrong button
+  // entirely and returns submitted:true for an application nobody received.
+  const ACCOUNT_WALL =
+    /create an account|sign in to apply|create account|candidate account|register to apply|already have an account/i;
+  const liveAccountWall = ACCOUNT_WALL.test(live.text || '');
+  if (fill.wall === 'account-required' || liveAccountWall) {
+    return {
+      submitted: false, url, wall: 'account-required',
+      detected: fill.wall === 'account-required' ? 'while filling' : 'on the page now',
+      error:
+        'This employer requires a candidate account before an application can be ' +
+        'submitted. This agent does not create accounts. The form is filled and ' +
+        'waiting - a human must sign in and submit it.',
     };
   }
 

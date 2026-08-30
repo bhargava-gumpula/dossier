@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "pdf-parse": "^2.4.5",
-    "playwright": "^1.49.0"
+    "playwright": "^1.49.0",
+    "undici": "^8.10.0"
   }
 }
