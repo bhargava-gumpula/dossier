@@ -131,17 +131,20 @@ bash scripts/verify-sandbox.sh
 
 Proves the agent's execution is genuinely remote, rather than quietly running on the host.
 
-**One known source of variance, named rather than hidden.** Section 10 runs the real agent, and
-a model that retries after a transient MCP error can call `submit_form` twice; the approved
-submission then does not land and three assertions fail together. It is model-dependent —
-noticeably more frequent on `claude-haiku-4-5`, which was used to keep iteration cheap. A clean
-run shows exactly `get_candidate_profile → detect_apply_route → inspect_form → tailor_resume →
-fill_form → submit_form`: one submit, nothing after approval.
+**All 62 pass.** They run against live job boards, a real browser and a real agent turn, so an
+occasional network wobble at an employer's end is possible; re-run before concluding anything.
 
-Worth knowing when reading a failure there: the *tailored résumé was sent* assertion inspects the
-last record in the sink, so when the submit does not land it reports a stale record from an
-earlier run and fails as a consequence of the first failure, not on its own. Tailoring is proven
-independently by sections 9b and 9c.
+One piece of history worth keeping, because it was the most misleading bug in the project. Section
+10 failed intermittently for days and was written off as "the agent sometimes retries". It was
+not. The harness wraps every MCP tool in a meta tool — an actual invocation is `call_tool`, while
+`get_tool_info` merely reads a schema — and *both* carry the tool's name in
+`arguments.tool_name`. The verifier preferred that field, so "look up `submit_form`'s schema"
+counted as "call `submit_form`". Since the agent reads all six schemas before it starts, every
+run reported the entire workflow twice and two submissions.
+
+The agent had been correct the whole time. The check was wrong. It is fixed by deciding
+meta-ness from the real function name before resolving the logical one — and it is a good
+argument for reading a flaky test's evidence before believing its story.
 
 ---
 

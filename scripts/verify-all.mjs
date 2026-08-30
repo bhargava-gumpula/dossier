@@ -248,11 +248,29 @@ while (waited < 240000) {
   await sleep(4000); waited += 4000;
 }
 
+// The harness wraps every MCP tool in a meta tool: an actual invocation is
+// call_tool, while list_tools / get_tool_info / get_tool_output_schema only read
+// a schema. Both carry the tool's name in arguments.tool_name, so preferring
+// that field counted "look up submit_form's schema" as "call submit_form" - and
+// since the agent looks up all six tools before starting, every run reported the
+// whole workflow twice and two submits. That is what the long-standing
+// intermittent failure of this section actually was: a miscount here, not the
+// agent redoing its work.
+//
+// Decide meta-ness from the real function name, then resolve the logical name.
+const META = ['list_tools', 'get_tool_info', 'get_tool_output_schema'];
+function invokedTool(c) {
+  const fn = c.function?.name;
+  if (META.includes(fn)) return null;
+  let a = {}; try { a = JSON.parse(c.function?.arguments ?? '{}'); } catch {}
+  return a.tool_name ?? fn ?? null;
+}
+
 const events = (await tf('GET', `/sessions/${session.id}/turns/${turn.id}/events`)).data ?? [];
 const used = new Set();
 for (const e of events) for (const c of ((e.event ?? e).tool_calls ?? [])) {
-  let a = {}; try { a = JSON.parse(c.function.arguments); } catch {}
-  used.add(a.tool_name ?? c.function?.name);
+  const n = invokedTool(c);
+  if (n) used.add(n);
 }
 t('used detect_apply_route', used.has('detect_apply_route'));
 t('used get_candidate_profile', used.has('get_candidate_profile'));
@@ -271,9 +289,8 @@ for (const e of events) for (const c of ((e.event ?? e).tool_calls ?? [])) {
   // event echoing its id. Deduping by id keeps that from reading as two calls.
   if (c.id && seenCall.has(c.id)) continue;
   if (c.id) seenCall.add(c.id);
-  let a = {}; try { a = JSON.parse(c.function?.arguments ?? '{}'); } catch {}
-  const n = a.tool_name ?? c.function?.name;
-  if (n && !['list_tools', 'get_tool_info', 'get_tool_output_schema'].includes(n)) calls.push(n);
+  const n = invokedTool(c);
+  if (n) calls.push(n);
 }
 const submits = calls.filter((c) => c === 'submit_form').length;
 t('exactly one submit_form call', submits === 1, `${submits} calls`);
@@ -301,9 +318,8 @@ if (gate) {
   const postEvents = (await tf('GET', `/sessions/${session.id}/turns/${lastTurn.id}/events`)).data ?? [];
   const postCalls = [];
   for (const e of postEvents) for (const c of ((e.event ?? e).tool_calls ?? [])) {
-    let a = {}; try { a = JSON.parse(c.function.arguments); } catch {}
-    const n = a.tool_name ?? c.function?.name;
-    if (n && !['list_tools', 'get_tool_info', 'get_tool_output_schema'].includes(n)) postCalls.push(n);
+    const n = invokedTool(c);
+    if (n) postCalls.push(n);
   }
   t('no tool calls after approval', postCalls.length === 0, postCalls.join(', ') || 'none');
 
