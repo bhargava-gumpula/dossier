@@ -37,3 +37,33 @@ tool.response
 model.message
 turn.done
 ```
+
+## Phase 2 findings
+
+| Thing | Correct form | Wrong guess that fails |
+| --- | --- | --- |
+| Register an MCP server | `POST /settings/mcp-servers` with `{"manifest":{type,name,url,description}}` | posting to `/mcp-servers` (GET only) |
+| Confirm the harness sees tools | `GET /mcp-servers/{name}/tools` | trusting your own `tools/list` |
+| Pause data on a turn | `state.required_actions` — **snake_case** | `state.requiredActions`, as the published docs show |
+| Answer `ask_user_question` | new turn with `{"type":"user.tool_response", thread_id, tool_call_id, content}` | — |
+| Approve a held tool | new turn with `{"type":"user.tool_approval", ...}` | — |
+
+`TurnInputItem` is exactly three types: `user.message`, `user.tool_approval`, `user.tool_response`.
+
+**Tool annotations are load-bearing.** TrueForge's default approval policy is
+`["@write","@destructive"]`, and an unannotated MCP tool is treated as destructive. Every
+read-only tool therefore declares `readOnlyHint: true, destructiveHint: false`, or the harness
+gates every call and there is no single clean approval gate left to demonstrate.
+
+### Verified agent behaviour
+
+Asked for "a backend engineer role at Ramp", the agent in one turn: loaded tools on demand
+(`list_tools` / `get_tool_info`), called `find_jobs` over MCP, **wrote and ran Python in the
+sandbox** to process the result, then **stopped and asked which of 32 matching roles to use**
+rather than guessing. After the answer it detected the route and reported:
+
+> "Can I complete it myself? **No.** The form is protected by a **CAPTCHA** … I'll fill out the
+> entire application form for you … then hand it over to you to solve the CAPTCHA and click
+> submit yourself."
+
+That is the product thesis, produced from live detection against a real posting.
