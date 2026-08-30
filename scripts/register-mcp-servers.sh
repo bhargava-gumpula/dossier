@@ -8,6 +8,7 @@ set -euo pipefail
 
 BASE="${TRUEFORGE_BASE_URL:-http://localhost:8790}/api/v1"
 JOBS_PORT="${JOBS_MCP_PORT:-8793}"
+APPLY_PORT="${APPLY_MCP_PORT:-8794}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if ! curl -fsS -m 5 -o /dev/null "${BASE%/api/v1}" 2>/dev/null; then
@@ -73,6 +74,8 @@ print(json.dumps({'manifest':m['manifest']}))" "$file" \
 echo "Registering Dossier with TrueForge at ${BASE%/api/v1}"
 register_mcp "dossier-jobs" "http://127.0.0.1:${JOBS_PORT}/mcp" \
   "Find live job postings by company name and determine how each specific employer accepts applications."
+register_mcp "dossier-apply" "http://127.0.0.1:${APPLY_PORT}/mcp" \
+  "Read, fill and submit real job application forms with a real browser. Submitting is irreversible."
 register_agent "$ROOT/agent/dossier.agent.json"
 register_agent "$ROOT/agent/sandbox-check.agent.json"
 

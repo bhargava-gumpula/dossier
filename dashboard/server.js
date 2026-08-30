@@ -20,6 +20,19 @@ const TF = (process.env.TRUEFORGE_BASE_URL ?? 'http://localhost:8790') + '/api/v
 const QUEUE = `${HERE}/queue.json`;
 const PROFILE = process.env.DOSSIER_PROFILE ?? `${ROOT}/fixtures/persona/profile.json`;
 const AGENT = 'dossier';
+const JOBS_MCP = `http://127.0.0.1:${process.env.JOBS_MCP_PORT ?? 8793}/mcp`;
+
+async function mcpCall(url, name, args) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call',
+                           params: { name, arguments: args } }),
+  });
+  const j = await res.json();
+  if (j.error) throw new Error(j.error.message);
+  return j.result?.structuredContent ?? j.result;
+}
 
 // ------------------------------------------------------------------- storage
 function loadQueue() {
@@ -112,6 +125,51 @@ const api = {
     const profile = existsSync(PROFILE) ? JSON.parse(readFileSync(PROFILE, 'utf8')) : null;
     if (profile) delete profile._comment;
     return { jobs, profile };
+  },
+
+  // Company -> the roles they are actually hiring for, so the human picks
+  // rather than the agent guessing which requisition they meant.
+  async 'POST /api/positions'(body) {
+    const { company, role } = body;
+    if (!company) throw new Error('company required');
+    const r = await mcpCall(JOBS_MCP, 'find_jobs', { company, role, limit: 40 });
+    return {
+      company,
+      found: r.found,
+      source: r.source ?? null,
+      careersUrl: r.careers_url ?? null,
+      note: r.note ?? r.reason ?? null,
+      positions: (r.jobs ?? []).map((j, i) => ({
+        key: j.id ?? `p${i}`,
+        title: j.title ?? j.url,
+        location: j.location ?? null,
+        url: j.applyUrl ?? j.url,
+      })),
+    };
+  },
+
+  // Queue the chosen roles. Nothing starts on its own - each row still needs
+  // Start, and each still stops at its own gate.
+  async 'POST /api/positions/queue'(body) {
+    const { company, positions = [] } = body;
+    if (!positions.length) throw new Error('no positions selected');
+    const q = loadQueue();
+    const added = [];
+    for (const p of positions) {
+      const job = {
+        id: `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        url: p.url,
+        title: p.title,
+        company,
+        location: p.location ?? null,
+        status: 'found',
+        addedAt: new Date().toISOString(),
+      };
+      q.jobs.unshift(job);
+      added.push(job);
+    }
+    saveQueue(q);
+    return { added };
   },
 
   async 'POST /api/jobs'(body) {

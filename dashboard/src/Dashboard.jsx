@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Composer, PositionPicker } from './Composer.jsx';
 
 const api = async (path, body) => {
   const res = await fetch(path, {
@@ -21,9 +22,10 @@ export default function Dashboard({ onHome }) {
   const [jobs, setJobs] = useState([]);
   const [profile, setProfile] = useState(null);
   const [selId, setSelId] = useState(null);
-  const [query, setQuery] = useState('');
   const [tab, setTab] = useState('application');
   const [busy, setBusy] = useState(false);
+  const [picker, setPicker] = useState(null);   // company -> roles, awaiting choice
+  const [view, setView] = useState('compose');  // compose | picker | job
 
   const refresh = useCallback(async () => {
     try {
@@ -41,13 +43,41 @@ export default function Dashboard({ onHome }) {
 
   const sel = jobs.find((j) => j.id === selId) ?? null;
 
-  const addJob = async () => {
-    if (!query.trim()) return;
-    const isUrl = /^https?:\/\//i.test(query.trim());
-    const { job } = await api('/api/jobs', isUrl ? { url: query.trim() } : { query: query.trim() });
-    setQuery('');
-    setSelId(job.id);
-    refresh();
+  // "backend engineer at Ramp" -> role + company. A bare name is just a company.
+  const parse = (text) => {
+    const m = text.match(/^(.*?)\s+(?:at|@)\s+(.+)$/i);
+    return m ? { role: m[1].trim(), company: m[2].trim() } : { company: text.trim(), role: null };
+  };
+
+  const compose = async (text) => {
+    setBusy(true);
+    try {
+      if (/^https?:\/\//i.test(text)) {
+        const { job } = await api('/api/jobs', { url: text });
+        setSelId(job.id); setView('job'); await refresh();
+        return;
+      }
+      const { company, role } = parse(text);
+      const result = await api('/api/positions', { company, role });
+      setPicker(result); setView('picker');
+    } catch (e) { alert(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const queue = async (positions, agentChooses) => {
+    setBusy(true);
+    try {
+      const { added } = await api('/api/positions/queue', {
+        company: picker.company,
+        positions: positions.map((p) => ({ title: p.title, url: p.url, location: p.location })),
+      });
+      // Handing the choice over explicitly: start them all and let the agent
+      // report which it judged a real fit.
+      if (agentChooses) for (const j of added) await api('/api/jobs/start', { id: j.id });
+      setPicker(null); setView('job'); setSelId(added[0]?.id ?? null);
+      await refresh();
+    } catch (e) { alert(e.message); }
+    finally { setBusy(false); }
   };
 
   const act = async (path, body) => {
@@ -60,7 +90,7 @@ export default function Dashboard({ onHome }) {
   const startable = jobs.filter((j) => (j.live?.status ?? 'found') === 'found');
 
   return (
-    <div className="app">
+    <div className={`app${jobs.length ? '' : ' solo'}`}>
       <aside className="rail">
         <div className="brand">
           <div>
@@ -71,22 +101,14 @@ export default function Dashboard({ onHome }) {
         </div>
 
         <div className="add">
-          <input
-            placeholder="backend engineer at Ramp"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addJob()}
-          />
-          <div className="add-row">
-            <button className="btn primary" onClick={addJob} disabled={!query.trim()}>Add</button>
-            <button
-              className="btn"
-              disabled={!startable.length || busy}
-              onClick={() => startable.forEach((j) => act('/api/jobs/start', { id: j.id }))}
-            >
+          <Composer onSubmit={compose} busy={busy} compact />
+          {startable.length > 0 && (
+            <button className="btn" style={{ marginTop: 10, width: '100%' }}
+              disabled={busy}
+              onClick={() => startable.forEach((j) => act('/api/jobs/start', { id: j.id }))}>
               Start all ({startable.length})
             </button>
-          </div>
+          )}
         </div>
 
         <div className="jobs">
@@ -96,7 +118,8 @@ export default function Dashboard({ onHome }) {
           {jobs.map((j) => {
             const st = j.live?.status ?? 'found';
             return (
-              <div key={j.id} className={`job${j.id === selId ? ' sel' : ''}`} onClick={() => setSelId(j.id)}>
+              <div key={j.id} className={`job${j.id === selId ? ' sel' : ''}`}
+                onClick={() => { setSelId(j.id); setView('job'); }}>
                 <div className="job-title">{j.title}</div>
                 {j.company && <div className="job-co">{j.company}</div>}
                 <div className="job-foot">
@@ -114,16 +137,15 @@ export default function Dashboard({ onHome }) {
         </div>
       </aside>
 
-      <main className="pane">
-        {!sel ? (
-          <div className="empty">
-            <div>
-              <div style={{ fontSize: 15, marginBottom: 6 }}>No application selected</div>
-              <div style={{ fontSize: 13 }}>Add a job on the left, then press Start.</div>
-            </div>
-          </div>
+      <main className={`pane${view === 'compose' ? ' centred' : ''}`}>
+        {view === 'picker' && picker ? (
+          <PositionPicker result={picker} onQueue={queue} busy={busy}
+            onBack={() => { setPicker(null); setView('compose'); }} />
+        ) : view === 'job' && sel ? (
+          <Detail job={sel} profile={profile} tab={tab} setTab={setTab}
+            act={act} busy={busy} refresh={refresh} />
         ) : (
-          <Detail job={sel} profile={profile} tab={tab} setTab={setTab} act={act} busy={busy} refresh={refresh} />
+          <Composer onSubmit={compose} busy={busy} />
         )}
       </main>
     </div>

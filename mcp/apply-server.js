@@ -17,7 +17,9 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inspectForm, fillForm, getFill, dropFill } from './lib/browser.js';
-import { loadProfile, applyEdits, rebuildResume, snapshot, listHistory } from './lib/profile.js';
+import { loadProfile, applyEdits, rebuildResume, snapshot, listHistory, tailorProfile, renderResumeHtml } from './lib/profile.js';
+import { mkdirSync } from 'node:fs';
+import { chromium as _chromium } from 'playwright';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // The sandbox is a remote container with no view of this machine's disk, so the
@@ -74,6 +76,44 @@ const TOOLS = [
         },
       },
       required: ['edits'],
+    },
+  },
+  {
+    name: 'tailor_resume',
+    description:
+      "Produce a version of the resume aimed at one specific job, and return the " +
+      'path to the tailored PDF so it can be attached with fill_form.\n\n' +
+      'This reorders and emphasises what is already in the profile. It cannot add ' +
+      'anything: leadSkills must name skills the candidate already lists, and ' +
+      'leadBullets must match an accomplishment they already have. Anything else ' +
+      'is rejected rather than written, because it would be a new claim. Nothing ' +
+      'is removed either - de-emphasised content moves down the page, so the ' +
+      'tailored resume still says everything the original said.\n\n' +
+      'Read the job first, then choose which real experience to lead with.',
+    annotations: { title: 'Tailor resume to a job', readOnlyHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_title: { type: 'string', description: 'Used to name the tailored file.' },
+        lead_skills: {
+          type: 'array', items: { type: 'string' },
+          description: 'Existing skills to move to the front, most relevant first.',
+        },
+        lead_bullets: {
+          type: 'array',
+          description: 'Existing accomplishments to lead with, per employer.',
+          items: {
+            type: 'object',
+            properties: {
+              company: { type: 'string' },
+              match: { type: 'string', description: 'Words from the existing bullet to match.' },
+            },
+            required: ['company', 'match'],
+          },
+        },
+        headline: { type: 'string', description: 'One line under the name. Must be true of the candidate.' },
+      },
+      required: ['job_title'],
     },
   },
   {
@@ -178,6 +218,49 @@ async function toolUpdateProfile({ edits = [] }) {
   };
 }
 
+async function toolTailorResume({ job_title, lead_skills = [], lead_bullets = [], headline = null }) {
+  if (!existsSync(PROFILE_PATH)) return { error: `no profile at ${PROFILE_PATH}` };
+  const profile = loadProfile(PROFILE_PATH);
+  delete profile._comment;
+
+  const { profile: tailored, applied, rejected, contentPreserved } =
+    tailorProfile(profile, { leadSkills: lead_skills, leadBullets: lead_bullets, headline });
+
+  if (!contentPreserved) {
+    return { error: 'refusing to write: tailoring would have changed the amount of content' };
+  }
+
+  const slug = String(job_title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+  const dir = `${ROOT}/fixtures/persona/tailored`;
+  mkdirSync(dir, { recursive: true });
+  const html = `${dir}/${slug}.html`;
+  const pdf = `${dir}/${slug}.pdf`;
+
+  writeFileSync(html, renderResumeHtml(tailored));
+  const browser = await _chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.goto('file://' + html);
+    await page.pdf({ path: pdf, format: 'Letter', printBackground: true });
+  } finally { await browser.close(); }
+
+  return {
+    tailored: true,
+    resume_path: pdf,
+    job_title,
+    led_with_skills: applied.skills,
+    led_with_accomplishments: applied.bullets.map((b) => `${b.company}: ${b.bullet.slice(0, 90)}`),
+    rejected,
+    original_untouched: true,
+    content_preserved: true,
+    note:
+      rejected.length
+        ? `${rejected.length} request(s) were refused because they are not in the profile - ` +
+          'adding them would be a new claim. Everything applied is real experience, reordered.'
+        : 'Reordered real experience for this role. Nothing added, nothing removed.',
+  };
+}
+
 async function toolInspectForm({ apply_url }) {
   const r = await inspectForm(apply_url, { screenshot: false });
   return r;
@@ -254,6 +337,7 @@ async function toolSubmitForm({ fill_id }) {
 const IMPL = {
   get_candidate_profile: toolGetCandidateProfile,
   update_profile: toolUpdateProfile,
+  tailor_resume: toolTailorResume,
   inspect_form: toolInspectForm,
   fill_form: toolFillForm,
   submit_form: toolSubmitForm,

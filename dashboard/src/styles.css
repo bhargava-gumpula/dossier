@@ -130,3 +130,68 @@
   .rail { max-height: 42vh; }
   .pane { padding: 24px 20px 50px; }
 }
+
+/* ------------------------------------------------------- chat-first surface */
+/* Before anything is queued there is no rail - just one prompt in the middle,
+   the way a terminal agent opens. The rail appears once there is a queue. */
+.app.solo { grid-template-columns: 1fr; }
+.app.solo .rail { display: none; }
+
+.pane.centred { display: grid; place-items: center; }
+
+.composer { width: 100%; max-width: 620px; text-align: center; }
+.composer-h { font-size: 34px; font-weight: 620; letter-spacing: -0.028em; line-height: 1.1; }
+.composer-sub { color: var(--fg-2); margin-top: 10px; font-size: 16.5px; }
+.composer-box {
+  display: flex; align-items: center; gap: 10px; margin-top: 28px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 15px; padding: 6px 8px 6px 16px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.composer-box:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 14%, transparent);
+}
+.composer-caret { color: var(--blue); font-weight: 650; font-size: 17px; }
+.composer-box input {
+  flex: 1; background: none; border: 0; outline: none;
+  font-size: 16.5px; padding: 10px 0; letter-spacing: -0.012em;
+}
+.composer-box input::placeholder { color: var(--fg-3); }
+.composer-hint {
+  margin-top: 16px; font-size: 13px; color: var(--fg-3); line-height: 1.5;
+  max-width: 470px; margin-inline: auto;
+}
+
+/* In the rail it collapses to just the input. */
+.composer.compact { max-width: none; text-align: left; }
+.composer.compact .composer-box {
+  margin-top: 0; border-radius: 11px; padding: 3px 5px 3px 12px;
+}
+.composer.compact .composer-box input { font-size: 14px; padding: 7px 0; }
+.composer.compact .btn { padding: 6px 12px; font-size: 12.5px; }
+
+/* -------------------------------------------------------- position picker */
+.picker { max-width: 720px; }
+.picker .back { padding: 4px 0; margin-bottom: 18px; }
+.picker-h { font-size: 26px; font-weight: 620; letter-spacing: -0.024em; }
+.picker-sub { color: var(--fg-2); margin-top: 8px; font-size: 15px; line-height: 1.5; }
+
+.position-list {
+  margin-top: 24px; border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; max-height: 52vh; overflow-y: auto;
+}
+.position {
+  display: flex; align-items: flex-start; gap: 12px; padding: 13px 16px;
+  border-bottom: 1px solid var(--line); cursor: pointer;
+  transition: background .12s;
+}
+.position:last-child { border-bottom: 0; }
+.position:hover { background: var(--surface-2); }
+.position.on { background: color-mix(in srgb, var(--blue) 7%, transparent); }
+.position input { margin-top: 3px; accent-color: var(--blue); width: 15px; height: 15px; }
+.position-body { display: flex; flex-direction: column; gap: 2px; }
+.position-title { font-size: 14.5px; font-weight: 500; letter-spacing: -0.011em; }
+.position-loc { font-size: 12.5px; color: var(--fg-3); }
+
+.picker-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }

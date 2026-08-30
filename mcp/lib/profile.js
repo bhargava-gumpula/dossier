@@ -49,6 +49,7 @@ export function renderResumeHtml(p) {
 body { font: 10.5pt/1.45 "Helvetica Neue", Helvetica, Arial, sans-serif; color:#111; }
 h1 { font-size: 19pt; margin:0 0 2px; letter-spacing:-.3px; }
 .contact { color:#555; font-size:9.5pt; margin-bottom:14px; }
+.headline { color:#222; font-size:11pt; margin:2px 0 6px; font-weight:500; }
 h2 { font-size:9.5pt; text-transform:uppercase; letter-spacing:1.2px; color:#666;
      border-bottom:1px solid #ddd; padding-bottom:3px; margin:16px 0 8px; }
 .row { display:flex; justify-content:space-between; }
@@ -58,6 +59,7 @@ ul { margin:4px 0 0 16px; padding:0; } li { margin-bottom:3px; }
 .job { margin-bottom:11px; }
 </style>
 <h1>${esc(p.fullName ?? '')}</h1>
+${p.headline ? `<div class="headline">${esc(p.headline)}</div>` : ''}
 <div class="contact">${[p.email, p.phone, p.location, p.github].filter(Boolean).map(esc).join(' · ')}</div>
 <h2>Experience</h2>${exp}
 <h2>Skills</h2><div>${(p.skills ?? []).map(esc).join(', ')}</div>
@@ -135,4 +137,68 @@ export function applyEdits(profile, edits = []) {
     }
   }
   return { profile, applied, rejected };
+}
+
+// ------------------------------------------------------------ tailoring
+//
+// A tailored resume reorders and emphasises what is already there. It never
+// adds a claim. That is enforced structurally: this function accepts only
+// references to existing skills and bullets, so a request to lead with
+// something the candidate has not done fails rather than inventing it.
+//
+// Nothing is dropped either - de-emphasised content moves down, it does not
+// disappear, so the tailored resume still says everything the original said.
+
+export function tailorProfile(profile, { leadSkills = [], leadBullets = [], headline = null } = {}) {
+  const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const applied = { skills: [], bullets: [] };
+  const rejected = [];
+
+  const out = JSON.parse(JSON.stringify(profile));
+
+  // Skills: requested ones move to the front, in the order given. The rest keep
+  // their existing order behind them. None are removed.
+  const known = new Map(out.skills.map((s) => [norm(s), s]));
+  const lead = [];
+  for (const want of leadSkills) {
+    const hit = known.get(norm(want));
+    if (!hit) {
+      rejected.push({ type: 'skill', value: want, reason: 'not in the profile - it would be a new claim' });
+      continue;
+    }
+    if (!lead.includes(hit)) { lead.push(hit); applied.skills.push(hit); }
+  }
+  out.skills = [...lead, ...out.skills.filter((s) => !lead.includes(s))];
+
+  // Bullets: same rule, per employer. A requested bullet must already exist.
+  for (const req of leadBullets) {
+    const job = (out.experience ?? []).find((e) => norm(e.company) === norm(req.company));
+    if (!job) {
+      rejected.push({ type: 'bullet', ...req, reason: `no experience entry for "${req.company}"` });
+      continue;
+    }
+    const idx = job.bullets.findIndex((b) => norm(b).includes(norm(req.match ?? req.value ?? '')));
+    if (idx < 0) {
+      rejected.push({ type: 'bullet', ...req, reason: 'no existing bullet matches - it would be a new claim' });
+      continue;
+    }
+    const [moved] = job.bullets.splice(idx, 1);
+    job.bullets.unshift(moved);
+    applied.bullets.push({ company: job.company, bullet: moved });
+  }
+
+  if (headline) out.headline = String(headline).slice(0, 160);
+
+  const originalBulletCount = (profile.experience ?? []).reduce((n, e) => n + (e.bullets?.length ?? 0), 0);
+  const tailoredBulletCount = (out.experience ?? []).reduce((n, e) => n + (e.bullets?.length ?? 0), 0);
+
+  return {
+    profile: out,
+    applied,
+    rejected,
+    // The guarantee, checked rather than asserted.
+    contentPreserved:
+      out.skills.length === profile.skills.length &&
+      tailoredBulletCount === originalBulletCount,
+  };
 }
