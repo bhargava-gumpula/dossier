@@ -114,3 +114,20 @@
   .band { padding: 84px 0; }
   .stat-row { gap: 34px; }
 }
+
+/* The product shot used to live inside the hero. The new hero owns a full
+   viewport of its own, so the shot is its own section now and brings its own
+   spacing rather than inheriting the hero's. */
+.hero-shot { padding: 0 0 8px; }
+.hero-shot .hero-art { margin-top: 0; padding: 72px 22px 90px; }
+
+/* Kept for the optional ASCII layer, which the hero takes as a `background`
+   slot. Unmounted at the moment; the rule costs nothing and means switching it
+   back on is a one-line change rather than a re-write. */
+.ascii-bg {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 600px; width: 100%;
+  display: block; pointer-events: none;
+  z-index: 0;
+}
+@media (max-width: 700px) { .ascii-bg { height: 460px; } }

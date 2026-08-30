@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import Hero from './Hero.jsx';
 
 // Apple's front-page grammar: a short declarative headline, one thin subhead,
 // a single blue call to action, then chapters separated by large silence.
@@ -35,20 +36,17 @@ export default function Landing({ onEnter }) {
       </nav>
 
       {/* ---------------------------------------------------------------- hero */}
-      <section className="hero">
-        <div className="wrap">
-          <p className="t-eyebrow reveal">Dossier</p>
-          <h1 className="t-hero reveal">Applies the way<br />each company asks.</h1>
-          <p className="t-sub reveal hero-sub">
-            Name a job. It works out how that employer actually accepts applications,
-            fills the real form, and stops one click short.
-          </p>
-          <div className="hero-cta reveal">
-            <button className="btn-pill" onClick={onEnter}>Open dashboard</button>
-            <a className="btn-pill ghost" href="#how">See how it works</a>
-          </div>
-        </div>
+      <Hero
+        eyebrow="Dossier"
+        title="Applies the way each company asks."
+        subtitle="Name a job. It works out how that employer actually accepts applications, fills the real form, and stops one click short."
+        ctaLabel="Open dashboard"
+        onCta={onEnter}
+        secondaryLabel="See how it works"
+        secondaryHref="#how"
+      />
 
+      <section className="hero-shot">
         <div className="hero-art reveal">
           <div className="chrome">
             <div className="chrome-bar"><i /><i /><i /></div>
