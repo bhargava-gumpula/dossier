@@ -49,7 +49,12 @@ export function slugify(company) {
 export function slugCandidates(company) {
   const base = slugify(company);
   const hyphen = company.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return [...new Set([base, hyphen])].filter(Boolean);
+  // slugify() strips filler words, which is right for "Coinbase Inc" and wrong
+  // for a company whose name really starts with one: "The Browser Company"
+  // became "browsercompany", so its actual board, thebrowsercompany, was never
+  // probed. Keep the stripped form first, but try the intact one as well.
+  const intact = company.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return [...new Set([base, intact, hyphen])].filter(Boolean);
 }
 
 export async function greenhouseJobs(slug) {
@@ -164,16 +169,18 @@ export async function workdayJobs(slug, { limit = 20, maxJobs = 200 } = {}) {
 // (/{company}/job/{id}) with the title in the anchor text, so the listing can be
 // read from the HTML without a browser. Nutanix is on Jobvite.
 //
-// Jobvite intermittently drops the connection instead of answering, which the
-// old single-shot fetch reported as "this company has no Jobvite board" - so
-// Nutanix resolved to nothing on roughly one call in three. A transport failure
-// is not an answer, so it is retried once.
+// Jobvite intermittently bounces a valid board to its job-seeker support page
+// with a 303 instead of serving it. Because the fetch follows redirects, that
+// arrives as a perfectly good 200 carrying no job links, and the caller reported
+// "this employer has no Jobvite board" - the one answer that is definitely
+// wrong. Nutanix resolved to nothing on roughly one call in three this way.
 //
-// This costs nothing on the common path. A company that is genuinely not on
-// Jobvite still redirects to Jobvite's support page and answers 200, so the
-// fetch succeeds, the link regex finds nothing, and we return null without a
-// second request. Only a thrown fetch - the actual blip - is retried.
-async function getBoardHtml(url, attempts = 2) {
+// A bounce cannot be told apart from a company that genuinely is not on Jobvite,
+// since both land on the same support page, so the only remedy is to ask again:
+// a real absence still answers the same way on the retry and still returns null,
+// a blip resolves. Landing anywhere other than the requested board counts as a
+// bounce, as does a thrown fetch.
+async function getBoardHtml(url, isBoard, attempts = 3) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 12000);
@@ -183,21 +190,25 @@ async function getBoardHtml(url, attempts = 2) {
         headers: { 'user-agent': UA, accept: 'text/html' },
         signal: ctl.signal,
       });
-      if (!res.ok) return null;
-      return await res.text();
+      if (res.ok && isBoard(res.url)) return await res.text();
+      if (attempt === attempts) return null;
     } catch {
       if (attempt === attempts) return null;
-      await new Promise((r) => setTimeout(r, 400));
     } finally {
       clearTimeout(timer);
     }
+    await new Promise((r) => setTimeout(r, 300 * attempt));
   }
   return null;
 }
 
 export async function jobviteJobs(slug) {
   const url = `https://jobs.jobvite.com/${encodeURIComponent(slug)}`;
-  const html = await getBoardHtml(url);
+  const onBoard = (landed) => {
+    try { return new URL(landed).pathname.toLowerCase().startsWith(`/${slug.toLowerCase()}`); }
+    catch { return false; }
+  };
+  const html = await getBoardHtml(url, onBoard);
   if (!html) return null;
 
   const re = new RegExp(

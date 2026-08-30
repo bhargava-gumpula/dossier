@@ -13,6 +13,12 @@
 import { createServer } from 'node:http';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
+// The submitted name is echoed back into an HTML page, so it is attacker-
+// controlled markup unless it is escaped. This is only the local demo sink,
+// but it is also the page a reader is most likely to copy from.
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 const PORT = Number(process.env.DEMO_EMPLOYER_PORT ?? 8795);
 const LOG = new URL('./received-applications.jsonl', import.meta.url).pathname;
 
@@ -117,7 +123,7 @@ const server = createServer((req, res) => {
       res.end(`<!doctype html><meta charset="utf-8"><title>Application received</title>
 <body style="font:16px/1.6 -apple-system,sans-serif;max-width:600px;margin:60px auto;padding:0 20px">
 <h1>Application received</h1>
-<p>Thank you, ${(fields.first_name || 'candidate')}. Your application for
+<p>Thank you, ${esc(fields.first_name || 'candidate')}. Your application for
 <strong>Backend Engineer, Payments</strong> has been received.</p>
 <p style="color:#666">Reference: NR-${Date.now().toString(36).toUpperCase()}</p>
 </body>`);

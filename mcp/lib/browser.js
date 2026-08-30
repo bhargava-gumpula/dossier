@@ -56,7 +56,51 @@ async function newPage() {
     viewport: { width: 1440, height: 1200 },
     locale: 'en-US',
   });
+
+  // Subresource guard. A page issues its own requests - images, XHR, fonts -
+  // and any of them can name a private address, so each is checked rather than
+  // trusting the one URL the caller passed in.
+  //
+  // This does not restrict the open web: the guard denies private and loopback
+  // destinations rather than allowing a list of hosts, so ordinary pages and
+  // their CDN assets load normally. Only http(s) is inspected - data:, blob:
+  // and about: never leave the process, and aborting them breaks real pages.
+  //
+  // Note this does NOT see redirects: Chromium follows a 30x for a main-frame
+  // navigation internally and raises no route event for the new URL. Redirect
+  // hops are checked after navigation by assertChainAllowed.
+  const decided = new Map();
+  await ctx.route('**/*', async (route) => {
+    const target = route.request().url();
+    if (!/^https?:/i.test(target)) return route.continue();
+    let ok = decided.get(target);
+    if (ok === undefined) {
+      try { await assertAllowedUrl(target); ok = true; }
+      catch { ok = false; }
+      decided.set(target, ok);
+    }
+    return ok ? route.continue() : route.abort('blockedbyclient');
+  });
+
   return { ctx, page: await ctx.newPage() };
+}
+
+// Redirects are the hole the pre-navigation check cannot cover: a public URL is
+// allowed, answers 302, and Chromium follows it to wherever it points without
+// consulting anything. Playwright keeps the chain on the response's request, so
+// every hop that was actually taken is re-checked here, plus wherever the page
+// ended up after any client-side navigation.
+//
+// This runs after the requests have been made, so it does not stop a redirect
+// being followed - it stops what was found there from being reported. The
+// caller must treat a throw as "return nothing about this page", which is what
+// keeps the browser from being read as a network oracle.
+async function assertChainAllowed(res, page) {
+  const hops = new Set();
+  for (let req = res?.request(); req; req = req.redirectedFrom()) hops.add(req.url());
+  const landed = page.url();
+  if (landed && landed !== 'about:blank') hops.add(landed);
+  for (const hop of hops) await assertAllowedUrl(hop);
 }
 
 // Runs in the page. Pulls the fields that actually exist after JS has run,
@@ -147,11 +191,15 @@ export async function inspectForm(url, { screenshot = true } = {}) {
     try {
       const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
       status = res?.status() ?? null;
+      await assertChainAllowed(res, page);
     } catch (err) {
+      const blocked = /blocked|does not resolve/.test(err.message);
       return {
         url, reachable: false, httpStatus: status,
-        error: `navigation failed: ${err.message.slice(0, 160)}`,
-        fields: [], canAutoSubmit: false, wall: 'unreachable',
+        error: blocked
+          ? `blocked: redirected to a refused address (${err.message})`
+          : `navigation failed: ${err.message.slice(0, 160)}`,
+        fields: [], canAutoSubmit: false, wall: blocked ? 'blocked' : 'unreachable',
       };
     }
 
@@ -272,9 +320,16 @@ export async function fillForm(url, { answers = {}, resumePath = null } = {}) {
   try {
     const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
     status = res?.status() ?? null;
+    await assertChainAllowed(res, page);
   } catch (err) {
     await ctx.close();
-    return { url, filled: false, error: `navigation failed: ${err.message.slice(0, 160)}` };
+    const blocked = /blocked|does not resolve/.test(err.message);
+    return {
+      url, filled: false,
+      error: blocked
+        ? `blocked: redirected to a refused address (${err.message})`
+        : `navigation failed: ${err.message.slice(0, 160)}`,
+    };
   }
   await page.waitForTimeout(2500);
 

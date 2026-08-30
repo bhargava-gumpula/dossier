@@ -102,6 +102,7 @@ function scoreTitle(title, role) {
 }
 
 async function toolSearchJobsOnWeb({ company, role, limit = 8 }) {
+  limit = clampLimit(limit, 8);
   if (!(await isSearchAvailable())) {
     return { error: 'web search is not configured. Run scripts/add-search-connector.sh.' };
   }
@@ -125,6 +126,7 @@ async function toolFetchBlockedPage({ url }) {
 }
 
 async function toolFindJobs({ company, role, limit = 10 }) {
+  limit = clampLimit(limit, 10);
   const r = await resolveCompany(company);
 
   if (!r.found) {
@@ -179,7 +181,7 @@ async function toolFindJobs({ company, role, limit = 10 }) {
     board: r.board,
     total_matching: total,
     ambiguous: Boolean(role) && total > 1,
-    jobs: jobs.slice(0, limit),
+    jobs: jobs.slice(0, clampLimit(limit)),
     note:
       Boolean(role) && total > 1
         ? 'Several roles matched. Present these to the human and let them pick ' +
@@ -251,10 +253,26 @@ async function handleRpc(msg) {
   return rpcError(id, -32601, `Method not found: ${method}`);
 }
 
+// A negative limit turns slice(0, n) into "everything except the last n", so a
+// caller asking for -1 results got nearly all of them. Anything not a sane
+// positive integer falls back to the documented default.
+function clampLimit(n, fallback = 10) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v < 1) return fallback;
+  return Math.min(Math.floor(v), 200);
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 4e6) req.destroy(); });
+    // destroy() alone emits neither 'end' nor, reliably, 'error', so the promise
+    // it was supposed to guard never settled and the request hung for ever.
+    // Reject explicitly, and treat an early close as a failure too.
+    req.on('data', (c) => {
+      data += c;
+      if (data.length > 4e6) { req.destroy(); reject(new Error('request body too large')); }
+    });
+    req.on('close', () => reject(new Error('connection closed before the body arrived')));
     req.on('end', () => resolve(data));
     req.on('error', reject);
   });

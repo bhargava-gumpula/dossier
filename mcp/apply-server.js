@@ -446,7 +446,14 @@ async function handleRpc(msg) {
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let d = '';
-    req.on('data', (c) => { d += c; if (d.length > 8e6) req.destroy(); });
+    // destroy() alone emits neither 'end' nor, reliably, 'error', so the promise
+    // it was supposed to guard never settled and the request hung for ever.
+    // Reject explicitly, and treat an early close as a failure too.
+    req.on('data', (c) => {
+      d += c;
+      if (d.length > 8e6) { req.destroy(); reject(new Error('request body too large')); }
+    });
+    req.on('close', () => reject(new Error('connection closed before the body arrived')));
     req.on('end', () => resolve(d));
     req.on('error', reject);
   });
